@@ -78,7 +78,7 @@ final class PerformanceController: NSObject, AVCaptureFileOutputRecordingDelegat
         DispatchQueue.global(qos: .userInitiated).async { session.startRunning(); movie.startRecording(to: file, recordingDelegate: self) }
     }
     func fileOutput(_ output: AVCaptureFileOutput, didStartRecordingTo fileURL: URL, from connections: [AVCaptureConnection]) { DispatchQueue.main.async { self.began() } }
-    func fileOutput(_ output: AVCaptureFileOutput, didFinishRecordingTo fileURL: URL, from connections: [AVCaptureConnection], error: Error?) { DispatchQueue.main.async { if error != nil && !FileManager.default.fileExists(atPath: fileURL.path) { self.failed("Chưa hoàn tất tệp camera.") } else { self.completed() } } }
+    func fileOutput(_ output: AVCaptureFileOutput, didFinishRecordingTo fileURL: URL, from connections: [AVCaptureConnection], error: Error?) { DispatchQueue.main.async { if let error = error as NSError?, (error.userInfo[AVErrorRecordingSuccessfullyFinishedKey] as? Bool) != true { self.failed("Chưa hoàn tất tệp camera.") } else { self.completed() } } }
     private func stop(id: String) {
         guard let mode = mode else { answer(id, true, true); return }; pendingStop = id
         if mode == "audio" { audio?.stop(); completed() }

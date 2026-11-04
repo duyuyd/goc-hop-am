@@ -15,7 +15,7 @@ tasks.register('prepareGocManifest') {
   doLast {
     def output = generatedManifest.get().asFile
     output.parentFile.mkdirs()
-    output.text = file('src/main/AndroidManifest.xml').getText('UTF-8').replace(' package="vn.gochopam.app"', '')
+    output.text = file('src/main/AndroidManifest.xml').getText('UTF-8').replace(' package="vn.gochopam.app"', '').replace(' android:debuggable="false"', '')
   }
 }
 android.sourceSets.main.manifest.srcFile(generatedManifest)
