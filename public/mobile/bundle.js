@@ -52,31 +52,62 @@ function parseLrc(text,lines){
  for(const line of String(text).split(/\r?\n/)){const matches=[...line.matchAll(/\[(\d{1,3}):(\d{2}(?:\.\d{1,3})?)\]/g)];if(!matches.length)continue;const phrase=line.replace(/\[[^\]]*\]/g,'').trim();if(!phrase)continue;let result=matchLyric(lines,phrase,from);if(!result)result=matchLyric(lines,phrase,0);if(!result)continue;from=result.index;for(const m of matches){if(Number(m[2])<60)cues.push({time:Number(m[1])*60+Number(m[2]),line:from})}}
  return cleanTimeline(cues,lines.length);
 }
+function captionTimeline(lines,cues){
+ const targets=lines.slice(0,1200).map(text=>lyricWords(text));let from=0,last=-1;const result=[],recent=[];
+ for(const cue of (Array.isArray(cues)?cues:[]).slice(0,3000)){
+  if(!cue||!Number.isFinite(cue.start)||cue.start<0||typeof cue.text!=='string')continue;
+  recent.push(cue);if(recent.length>3)recent.shift();
+  const options=[{words:lyricWords(cue.text),start:cue.start},{words:lyricWords(recent.map(c=>c.text).join(' ')),start:recent[0].start}];let best=null;
+  for(const option of options){const words=option.words.slice(-40),heard=new Set(words);if(words.length<3)continue;
+   const find=(start,end)=>{for(let i=start;i<end;i++){const target=targets[i];if(target.length<3)continue;let common=0;const unique=new Set(target);for(const word of unique)if(heard.has(word))common++;
+    const score=common/Math.max(3,Math.min(unique.size,heard.size));if(common>=3&&score>=.68){const rank=score+(i>=from&&i<from+5?.04:0)-Math.abs(i-from)*.0001;if(!best||rank>best.rank)best={line:i,time:option.start,rank};}}};
+   find(Math.max(0,from-1),Math.min(targets.length,from+16));if(!best)find(0,targets.length);
+  }
+  if(best){from=best.line;if(last!==best.line){result.push({time:best.time,line:best.line});last=best.line;recent.length=0;}}
+ }
+ return cleanTimeline(result,lines.length);
+}
 function createFollow({call,native,toast,getSong,getVideo,onHighlight,stopRegular}){
- const e=id=>document.getElementById(id);let mode='off',line=0,clock=null,settings={},lines=[],saveTimer,permissionPending=false;
+ const e=id=>document.getElementById(id);let mode='off',line=0,clock=null,settings={},lines=[],saveTimer,generation=0;
  const key=()=>{const song=getSong(),video=getVideo();return song&&video?song.sourceUrl+'|'+video:null};
- function status(text){e('follow-status').textContent=text;e('follow-live').hidden=mode==='off';e('mark-line').hidden=mode!=='mark'}
+ function status(text){e('follow-status').textContent=text;e('follow-live').hidden=!text;e('mark-line').hidden=mode!=='mark'}
  function highlight(index){line=Math.max(0,Math.min(lines.length-1,index));onHighlight(line)}
  function save(){clearTimeout(saveTimer);saveTimer=setTimeout(()=>call('settingsSave',{value:JSON.stringify(settings)}).catch(error=>toast(error.message)),150)}
- function stop(){mode='off';call('speechStop').catch(()=>{});e('follow-mode').value='off';status('')}
- function apply(){
-  call('speechStop').catch(()=>{});stopRegular();mode=e('follow-mode').value;const k=key();
-  if(mode==='time'||mode==='mark'){if(!k){mode='off';toast('Mở bản thu YouTube trước khi dùng mốc thời gian.');status('');return}if(mode==='time'&&!cleanTimeline(settings[k],lines.length).length){mode='off';toast('Bản thu chưa có mốc thật. Chọn đánh dấu câu hoặc nhập LRC.');status('');return}}
-  if(mode==='voice'){if(!native){mode='off';toast('Nhận giọng trên máy có trong ứng dụng Android/iOS được hỗ trợ.');status('');return}permissionPending=true;call('speechStart').then(()=>status('Đang nghe trên máy · thử nghiệm')).catch(error=>{mode='off';status('');toast(error.message)}).finally(()=>permissionPending=false)}
-  status(mode==='mark'?'Chọn dòng lời, rồi bấm đánh dấu khi câu bắt đầu.':mode==='time'?'Đang theo mốc của bản thu':mode==='voice'?'Đang chuẩn bị nhận giọng…':'');e('follow-dialog').close();
+ function stop(){++generation;mode='off';call('speechStop').catch(()=>{});e('follow-mode').value='off';status('')}
+ async function videoReady(){
+  const k=key(),id=getVideo();if(!k||!lines.length){toast('Mở video YouTube trước khi theo lời.');return}
+  const ticket=++generation;stopRegular();mode='time';e('follow-mode').value='time';
+  if(cleanTimeline(settings[k],lines.length).length){status('Lời đang theo thời gian YouTube · không dùng micro');return}
+  status('Đang khớp lời với phụ đề của video YouTube…');
+  try{const data=await call('api',{path:'/api/video-captions?'+new URLSearchParams({id})});if(ticket!==generation||id!==getVideo())return;
+   const timeline=captionTimeline(lines,data.cues);
+   if(!data.available||timeline.length<2){mode='off';status(data.reason||'Video này chưa có phụ đề khớp lời. Chọn bản khác hoặc nhập LRC.');return}
+   settings[k]=timeline;save();status('Đang theo lời YouTube · '+timeline.length+' mốc khớp từ phụ đề');
+  }catch{if(ticket===generation){mode='off';status('Chưa có mốc lời cho video này. Chọn bản khác hoặc nhập LRC.')}}
  }
- e('follow-open').addEventListener('click',()=>{e('follow-mode').value=mode;e('follow-dialog').showModal()});e('follow-close').addEventListener('click',()=>e('follow-dialog').close());e('follow-apply').addEventListener('click',apply);
+ function apply(){
+  const selected=e('follow-mode').value;call('speechStop').catch(()=>{});stopRegular();
+  if(selected==='time'){videoReady();e('follow-dialog').close();return}
+  ++generation;mode=selected==='mark'?'mark':'off';if(mode==='mark'&&!key()){mode='off';toast('Mở bản thu YouTube trước khi đánh dấu câu.');return}
+  status(mode==='mark'?'Chọn dòng lời, đánh dấu khi câu trong video bắt đầu.':'');e('follow-dialog').close();
+ }
+ e('follow-open').addEventListener('click',()=>{e('follow-mode').value=mode==='off'?'time':mode;e('follow-dialog').showModal()});e('follow-close').addEventListener('click',()=>e('follow-dialog').close());e('follow-apply').addEventListener('click',apply);
  e('follow-next').addEventListener('click',()=>highlight(line+1));
  e('mark-line').addEventListener('click',()=>{const k=key();if(!k||!clock||!Number.isFinite(clock.time)){toast('Chưa nhận được thời gian thật của video.');return}const cues=cleanTimeline(settings[k],lines.length).filter(c=>c.line!==line);cues.push({time:clock.time,line});settings[k]=cleanTimeline(cues,lines.length);save();status(`Đã ghi mốc ${clock.time.toFixed(1)} giây · câu ${line+1}`);highlight(line+1)});
- e('lrc-import').addEventListener('click',()=>{const k=key();if(!k){toast('Mở bản thu YouTube trước.');return}try{const cues=parseLrc(e('lrc-input').value,lines);if(!cues.length)throw new Error('Chưa khớp được câu nào. Hãy kiểm tra nội dung LRC.');settings[k]=cues;save();e('follow-mode').value='time';toast(`Đã nhập ${cues.length} mốc thật từ LRC.`)}catch(error){toast(error.message)}});
- window.GocSpeechEvent=event=>{if(mode!=='voice')return;if(event.error){mode='off';status('');toast(event.error);return}const found=matchLyric(lines,event.text,line);if(found){if(found.index!==line)highlight(found.index);status('Đang theo câu hát · nhận giọng thử nghiệm')}};
+ e('lrc-import').addEventListener('click',()=>{const k=key();if(!k){toast('Mở bản thu YouTube trước.');return}try{const cues=parseLrc(e('lrc-input').value,lines);if(!cues.length)throw new Error('Chưa khớp được câu nào. Hãy kiểm tra nội dung LRC.');settings[k]=cues;save();e('follow-mode').value='time';toast(`Đã nhập ${cues.length} mốc từ LRC.`)}catch(error){toast(error.message)}});
  call('settingsLoad').then(value=>{try{const object=JSON.parse(value);if(object&&typeof object==='object'&&!Array.isArray(object))settings=object}catch{}}).catch(()=>{});
- return {stop,onSong(song){stop();lines=String(song?.content||'').split('\n');line=0;clock=null},select(index){highlight(index)},onTick(event){clock=event;if(mode==='time'&&event.id===getVideo()){const next=timedLine(cleanTimeline(settings[key()],lines.length),event.time);if(next!==null&&next!==line)highlight(next)}},get permissionPending(){return permissionPending},get mode(){return mode}};
+ return {stop,videoReady,onSong(song){stop();lines=String(song?.content||'').split('\n');line=0;clock=null},select(index){highlight(index)},onTick(event){clock=event;if(mode==='time'&&event.id===getVideo()){const next=timedLine(cleanTimeline(settings[key()],lines.length),event.time);if(next!==null&&next!==line)highlight(next)}},get permissionPending(){return false},get mode(){return mode}};
 }
 
 function createStudio({call,native,toast,beforeRecord}){
  const e=id=>document.getElementById(id),android=!!window.GocAndroid,ios=native&&!android;let pending=false,active=false,recorder,streams=[],chunks=[],queue=Promise.resolve(),writeError=null,fileId=null,start=0,local=[],poll,timer;
  function status(text){e('record-status').textContent=text}
+ const supported=!!window.MediaRecorder&&!!navigator.mediaDevices?.getUserMedia;
+ if(!native){for(const option of e('record-mode').options){const screen=option.value.startsWith('screen');option.disabled=!supported||(screen&&!navigator.mediaDevices?.getDisplayMedia)}if(e('record-capabilities'))e('record-capabilities').textContent=supported?(navigator.mediaDevices?.getDisplayMedia?'Trình duyệt hỗ trợ thu âm, camera và quay màn hình.':'Trên trình duyệt điện thoại: thu âm và camera. Quay màn hình có trong APK Android.'): 'Thiết bị chưa cung cấp bộ ghi cho trang web. Mở bằng Chrome/Safari hoặc dùng APK Android.';e('record-start').disabled=!supported;}
+ function userError(error){return ({NotAllowedError:'Camera hoặc micro chưa được cho phép. Hãy mở quyền của trang/ứng dụng trong Cài đặt rồi thử lại.',NotFoundError:'Không tìm thấy camera hoặc micro trên thiết bị.',NotReadableError:'Camera hoặc micro đang bận. Hãy đóng ứng dụng khác đang dùng chúng.',SecurityError:'Trình duyệt chưa cho phép ghi trên trang này.',NotSupportedError:'Thiết bị chưa hỗ trợ định dạng ghi này.'})[error?.name]||error?.message||'Chưa bắt đầu được bản ghi.'}
+ function remember(item){return new Promise(resolve=>{if(!window.indexedDB){resolve();return}const request=indexedDB.open('goc-recordings-v1',1);request.onupgradeneeded=()=>request.result.createObjectStore('files',{keyPath:'name'});request.onerror=()=>resolve();request.onsuccess=()=>{const db=request.result,transaction=db.transaction('files','readwrite');transaction.objectStore('files').put({name:item.name,bytes:item.bytes,blob:item.blob});transaction.oncomplete=()=>{db.close();resolve()};transaction.onerror=()=>{db.close();status('Đã ghi xong. Hãy lưu tệp trước khi đóng trang.');resolve()}}})}
+ if(!native&&window.indexedDB){const request=indexedDB.open('goc-recordings-v1',1);request.onupgradeneeded=()=>request.result.createObjectStore('files',{keyPath:'name'});request.onsuccess=()=>{const db=request.result,r=db.transaction('files').objectStore('files').getAll();r.onsuccess=()=>{local=r.result.slice(-100).reverse().map(item=>({...item,url:URL.createObjectURL(item.blob)}));db.close()};r.onerror=()=>db.close()};}
+
  function live(on){active=on;e('record-live').hidden=!on;e('record-start').hidden=on;e('record-stop').hidden=!on;clearInterval(timer);if(on)timer=setInterval(()=>e('record-live-label').textContent='● Đang ghi · '+Math.floor((Date.now()-start)/1000)+' giây',1000)}
  function cleanStreams(){for(const s of streams)s.getTracks().forEach(t=>t.stop());streams=[];const v=e('web-camera-preview');v.srcObject=null;v.hidden=true;e('studio').append(v)}
  function preview(stream){const v=e('web-camera-preview');v.srcObject=stream;v.hidden=false;v.classList.add('camera-bubble');(e('reader').open?e('reader'):document.body).append(v);v.play().catch(()=>{});let drag;v.onpointerdown=event=>{drag={x:event.clientX,y:event.clientY,left:v.offsetLeft,top:v.offsetTop};v.setPointerCapture(event.pointerId)};v.onpointermove=event=>{if(!drag)return;v.style.right='auto';v.style.bottom='auto';v.style.left=Math.max(0,Math.min(innerWidth-90,drag.left+event.clientX-drag.x))+'px';v.style.top=Math.max(100,Math.min(innerHeight-140,drag.top+event.clientY-drag.y))+'px'};v.onpointerup=()=>drag=null}
@@ -86,20 +117,20 @@ function createStudio({call,native,toast,beforeRecord}){
   const camera=mode==='camera',screen=mode.startsWith('screen');let main;
   if(screen){if(!navigator.mediaDevices?.getDisplayMedia)throw new Error('Quay màn hình trên điện thoại có trong APK Android.');main=await navigator.mediaDevices.getDisplayMedia({video:true,audio:false});streams.push(main);const mic=await navigator.mediaDevices.getUserMedia({audio:true});streams.push(mic);main=new MediaStream([...main.getVideoTracks(),...mic.getAudioTracks()]);}
   else {if(android)await call('recordPermission',{camera,audio:true});main=await navigator.mediaDevices.getUserMedia({audio:true,video:camera?{facingMode:'user',width:{ideal:720},height:{ideal:960}}:false});streams.push(main);if(camera)preview(main)}
-  const types=camera||screen?['video/mp4','video/webm;codecs=vp8,opus','video/webm']:['audio/mp4','audio/webm;codecs=opus','audio/webm'];const mime=types.find(t=>window.MediaRecorder?.isTypeSupported(t));if(!mime)throw new Error('Trình duyệt này chưa hỗ trợ ghi. Hãy dùng ứng dụng Android.');
+  const types=camera||screen?['video/mp4','video/webm;codecs=vp8,opus','video/webm']:['audio/mp4','audio/webm;codecs=opus','audio/webm'];const mime=types.find(t=>window.MediaRecorder?.isTypeSupported(t));if(!window.MediaRecorder)throw new Error('Trình duyệt này chưa hỗ trợ ghi. Hãy dùng ứng dụng Android.');
   chunks=[];queue=Promise.resolve();writeError=null;fileId=android?(await call('recordCreate',{mime})).id:null;
-  recorder=new MediaRecorder(main,{mimeType:mime});
+  recorder=new MediaRecorder(main,mime?{mimeType:mime}:{});
   recorder.ondataavailable=event=>{if(!event.data.size)return;if(android){queue=queue.then(async()=>{for(let pos=0;pos<event.data.size;pos+=360000)await call('recordChunk',{id:fileId,data:await bytes64(event.data.slice(pos,pos+360000))})}).catch(error=>{writeError=error;status(error.message);if(recorder?.state==='recording')recorder.stop()})}else chunks.push(event.data)};
-  recorder.onstop=async()=>{try{await queue;if(writeError)throw writeError;if(android)await call('recordFinish',{id:fileId});else{const blob=new Blob(chunks,{type:mime}),ext=mime.includes('mp4')?(camera||screen?'mp4':'m4a'):'webm';local.unshift({name:'GocHopAm-'+Date.now()+'.'+ext,bytes:blob.size,blob,url:URL.createObjectURL(blob)})}status('Đã lưu bản ghi. Chọn Lưu tệp hoặc Chia sẻ.')}catch(error){if(android)await call('recordAbort').catch(()=>{});status(error.message)}finally{recorder=null;fileId=null;live(false);cleanStreams();refresh()}};
-  main.getVideoTracks().forEach(track=>track.addEventListener('ended',()=>{if(recorder?.state==='recording')recorder.stop()}));recorder.start(1000);
+  recorder.onstop=async()=>{try{await queue;if(writeError)throw writeError;if(android)await call('recordFinish',{id:fileId});else{const actualMime=recorder.mimeType||mime||'video/webm',blob=new Blob(chunks,{type:actualMime}),ext=actualMime.includes('mp4')?(camera||screen?'mp4':'m4a'):'webm';if(!blob.size)throw new Error('Bản ghi chưa có dữ liệu. Hãy ghi vài giây rồi dừng.');const item={name:'GocHopAm-'+Date.now()+'.'+ext,bytes:blob.size,blob,url:URL.createObjectURL(blob)};local.unshift(item);await remember(item)}status('Đã lưu bản ghi. Chọn Lưu tệp hoặc Chia sẻ.')}catch(error){if(android)await call('recordAbort').catch(()=>{});status(error.message)}finally{recorder=null;fileId=null;live(false);cleanStreams();refresh()}};
+  main.getVideoTracks().forEach(track=>track.addEventListener('ended',()=>{if(recorder?.state==='recording')recorder.stop()}));recorder.onerror=event=>{writeError=event.error||new Error('Bộ ghi bị gián đoạn.');if(recorder?.state==='recording')recorder.stop()};recorder.start(1000);
  }
  async function begin(){if(active||pending)return;pending=true;beforeRecord();status('Đang chờ quyền ghi của thiết bị…');e('record-start').disabled=true;const mode=e('record-mode').value;try{
   if(ios){await call('recordStart',{mode});}
   else if(android&&mode.startsWith('screen')){await call('recordPermission',{camera:mode==='screen-camera',audio:true});if(mode==='screen-camera'){const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user'},audio:false});streams.push(stream);preview(stream)}await call('recordScreenStart',{mode});}
-  else if(android&&mode==='audio'){await call('recordStart',{mode});}
+  else if(android&&(mode==='audio'||mode==='camera')){await call('recordStart',{mode});}
   else await makeWebRecorder(mode);
   start=Date.now();live(true);status('Đang ghi trên thiết bị. Bấm Dừng để lưu.');e('studio').close();
- }catch(error){cleanStreams();status(error.message||'Chưa bắt đầu được bản ghi.')}finally{pending=false;e('record-start').disabled=false}}
+ }catch(error){cleanStreams();live(false);status(userError(error))}finally{pending=false;e('record-start').disabled=!native&&!supported}}
  async function stop(){if(!active)return;status('Đang hoàn tất tệp…');if(recorder){if(recorder.state==='recording')recorder.stop();return}try{await call('recordStop');status('Đã lưu bản ghi.')}catch(error){status(error.message)}finally{live(false);cleanStreams();refresh()}}
  window.GocRecordingEvent=event=>{if(event?.error){toast(event.error);status(event.error)}if(event?.state==='stopped'||event?.state==='error'){live(false);cleanStreams();refresh()}};
  e('studio-open').addEventListener('click',()=>{e('studio').showModal();refresh()});e('studio-close').addEventListener('click',()=>e('studio').close());e('record-start').addEventListener('click',begin);e('record-stop').addEventListener('click',stop);e('record-stop-mini').addEventListener('click',stop);
@@ -122,7 +153,7 @@ function call(action,args={}){
   if(action==='save'){try{localStorage.setItem('goc-mobile-offline',args.value);return Promise.resolve(true)}catch{return Promise.reject(new Error('Thiết bị không còn đủ chỗ lưu.'))}}
   if(action==='metronome'){try{args.running?webMetro(args.bpm,args.beats):stopWebMetro();return Promise.resolve(true)}catch{return Promise.reject(new Error('Chưa phát được nhịp. Hãy kiểm tra âm lượng.'))}}
   if(action==='help'){window.open('https://gochopam.pages.dev/huong-dan','_blank','noopener');return Promise.resolve(true)}
-  if(action==='share')return navigator.share?navigator.share({title:args.title,text:args.text}):Promise.reject(new Error('Thiết bị chưa hỗ trợ chia sẻ.'));
+  if(action==='share')return navigator.share?navigator.share({title:args.title,text:args.text,url:args.url}):Promise.reject(new Error('Thiết bị chưa hỗ trợ chia sẻ.'));
   return Promise.resolve(true);
  }
  return new Promise((resolve,reject)=>{const id=String(++seq),timer=setTimeout(()=>{pending.delete(id);reject(new Error('Yêu cầu quá lâu. Hãy kiểm tra mạng rồi thử lại.'))},(['recordPermission','recordScreenStart','recordStart','speechStart'].includes(action)?180000:25000));pending.set(id,{resolve,reject,timer});const message={id,action,args};try{window.GocAndroid?window.GocAndroid.postMessage(JSON.stringify(message)):window.webkit.messageHandlers.goc.postMessage(message)}catch(error){clearTimeout(timer);pending.delete(id);reject(error)}});
@@ -136,7 +167,7 @@ window.GocVideoClosed=clearVideoUI;
 async function playVideo(value){const id=videoId(value);if(!id){$('video-status').textContent='Hãy nhập liên kết YouTube hợp lệ.';return}const token=++videoRequest;currentVideo=id;if(metroRunning){metroRunning=false;updateMetro()}$('video-tools').hidden=false;$('video-status').textContent='Đang mở YouTube…';try{
  if(native){await call('video',{id});if(token!==videoRequest)return;$('video-status').textContent='YouTube · cần mạng';}
  else{const frame=document.createElement('iframe');frame.title='YouTube · '+(current?.title||'Góc Hợp Âm');frame.src='player.html?id='+encodeURIComponent(id);frame.allow='autoplay; encrypted-media; picture-in-picture';frame.referrerPolicy='strict-origin-when-cross-origin';$('video-mount').replaceChildren(frame);$('video-mount').hidden=false;$('video-status').textContent='YouTube · cần mạng';}
- $('video-close').hidden=false;$('video-external').hidden=false;
+ $('video-close').hidden=false;$('video-external').hidden=false;follow.videoReady();
  }catch(error){if(token===videoRequest)$('video-status').textContent='Chưa mở được video. '+error.message;}}
 async function listen(){if(!current)return;const token=opening,videoToken=++videoRequest;$('video-tools').hidden=false;let videos=videoList(current);if(!videos.length){$('video-status').textContent='Đang tìm bản thu của bài…';try{const data=await call('api',{path:'/api/reader?'+new URLSearchParams({url:current.sourceUrl})});if(token!==opening||videoToken!==videoRequest||!current)return;current={...current,videos:videoList(data.song||{})};videos=videoList(current);}catch{if(token!==opening||videoToken!==videoRequest)return;}}
  if(token!==opening||videoToken!==videoRequest||!current)return;videoChoices();if(videos.length)playVideo(videos[0].id);else $('video-status').textContent='Chưa có bản thu gợi ý. Bạn có thể dán liên kết YouTube bên dưới.';}
@@ -167,7 +198,7 @@ $('listen').addEventListener('click',listen);$('video-close').addEventListener('
 $('tone-down').addEventListener('click',()=>{if(current){shift--;lyrics()}});$('tone-up').addEventListener('click',()=>{if(current){shift++;lyrics()}});$('tone-reset').addEventListener('click',()=>{shift=0;lyrics()});
 $('font-down').addEventListener('click',()=>{font=Math.max(14,font-2);lyrics()});$('font-up').addEventListener('click',()=>{font=Math.min(36,font+2);lyrics()});
 $('scroll').addEventListener('click',()=>{if(scrollFrame)stopScroll();else if(current){$('scroll').setAttribute('aria-pressed','true');$('scroll').textContent='Ⅱ Dừng cuộn';scrollFrame=requestAnimationFrame(scrollStep)}});
-$('share').addEventListener('click',()=>{if(current)call('share',{title:current.title,text:current.title+(current.author?' — '+current.author:'')+' · Góc Hợp Âm'}).catch(error=>toast(error.message))});
+$('share').addEventListener('click',()=>{if(current)call('share',{title:current.title,text:current.title+(current.author?' — '+current.author:'')+' · Góc Hợp Âm',url:'https://gochopam.pages.dev/?song='+encodeURIComponent(current.sourceUrl)}).catch(error=>toast(error.message))});
 $('bpm').addEventListener('input',updateMetro);$('beats').addEventListener('change',()=>{beatLights();updateMetro()});$('bpm-down').addEventListener('click',()=>{$('bpm').value=bpmValue(Number($('bpm').value)-5);updateMetro()});$('bpm-up').addEventListener('click',()=>{$('bpm').value=bpmValue(Number($('bpm').value)+5);updateMetro()});$('metro-toggle').addEventListener('click',()=>{metroRunning=!metroRunning;updateMetro()});
 let taps=[];$('tap-tempo').addEventListener('click',()=>{const now=Date.now();if(taps.length&&now-taps.at(-1)>2000)taps=[];taps.push(now);taps=taps.slice(-6);if(taps.length>1){$('bpm').value=bpmValue(60000*(taps.length-1)/(now-taps[0]));updateMetro()}});
 $('help').addEventListener('click',()=>call('help').catch(error=>toast(error.message)));
@@ -179,9 +210,11 @@ beatLights();call('load').then(value=>{try{offline=offlineLibrary(JSON.parse(val
 const follow=createFollow({call,native,toast,getSong:()=>current,getVideo:()=>currentVideo,stopRegular:stopScroll,onHighlight(index){document.querySelectorAll('.lyric-line').forEach(el=>el.classList.toggle('active',Number(el.dataset.line)===index));const el=document.querySelector('.lyric-line[data-line="'+index+'"]'),body=$('reader-body');if(el)body.scrollTo({top:Math.max(0,el.getBoundingClientRect().top-body.getBoundingClientRect().top+body.scrollTop-body.clientHeight*.35),behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'})}});
 window.GocVideoTick=event=>{if(event&&event.id===currentVideo&&Number.isFinite(event.time)){follow.onTick(event);if(event.error)$('video-status').textContent=event.error+' · thử Mở YouTube'}};
 window.addEventListener('message',event=>{const frame=$('video-mount').querySelector('iframe');if(event.origin===location.origin&&frame&&event.source===frame.contentWindow&&event.data?.type==='goc:tick')window.GocVideoTick(event.data)});
-const studio=createStudio({call,native,toast,beforeRecord(){follow.stop();stopWebMetro();metroRunning=false;metroLabel()}});
+const studio=createStudio({call,native,toast,beforeRecord(){stopWebMetro();metroRunning=false;metroLabel()}});
 $('reader-options-close').addEventListener('click',()=>$('reader-options').open=false);
 
 $('github').addEventListener('click',()=>native?call('github'):window.open('https://github.com/duyuyd/goc-hop-am','_blank','noopener'));
+
+$('share-app').addEventListener('click',()=>call('share',{title:'Góc Hợp Âm',text:'Cùng tìm hợp âm và tập hát trên Góc Hợp Âm · Nguyễn Phan Thế Duy',url:'https://gochopam.pages.dev/'}).catch(error=>toast(error.message)));
 
 })();

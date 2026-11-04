@@ -1,0 +1,11 @@
+{
+  "version": "1.2.1",
+  "versionCode": 4,
+  "package": "vn.gochopam.app.preview",
+  "channel": "preview",
+  "download": "/downloads/Goc_Hop_Am_Android_1.2.1.apk",
+  "sizeBytes": 87197,
+  "sha256": "c817d528f1ca566fd93f48484a508382d319ba16aae9564a5870adcbda3fa346",
+  "author": "Nguyễn Phan Thế Duy",
+  "sourceRepository": "https://github.com/duyuyd/goc-hop-am"
+}

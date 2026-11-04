@@ -17,9 +17,9 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.2.0</string>
+	<string>1.2.1</string>
 	<key>CFBundleVersion</key>
-	<string>3</string>
+	<string>4</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UILaunchScreen</key>
@@ -44,7 +44,7 @@
 	<key>NSCameraUsageDescription</key>
 	<string>Quay phần trình diễn của bạn sau khi bạn bấm Ghi lại.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Thu giọng hát vào bản ghi, hoặc nhận câu hát trên thiết bị khi bạn chọn theo lời.</string>
+	<string>Thu giọng hát vào bản ghi sau khi bạn bấm Ghi lại. Theo lời YouTube không bật micro.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Nhận giọng trên thiết bị để theo câu đang hát ở chế độ thử nghiệm.</string>
 </dict>

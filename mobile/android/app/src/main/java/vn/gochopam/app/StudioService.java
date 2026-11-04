@@ -42,13 +42,13 @@ public final class StudioService extends Service {
       if(directory(this).getUsableSpace()<20000000)throw new Exception("Thiết bị không còn đủ dung lượng ghi.");
       recorder=new MediaRecorder();recorder.setAudioSource(MediaRecorder.AudioSource.MIC);if(screen)recorder.setVideoSource(MediaRecorder.VideoSource.SURFACE);
       recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);recorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);recorder.setAudioSamplingRate(44100);recorder.setAudioEncodingBitRate(128000);recorder.setOutputFile(output.getAbsolutePath());
+      recorder.setMaxDuration(1800000);recorder.setMaxFileSize(300000000);recorder.setOnInfoListener((r,what,extra)->{if(what==MediaRecorder.MEDIA_RECORDER_INFO_MAX_DURATION_REACHED||what==MediaRecorder.MEDIA_RECORDER_INFO_MAX_FILESIZE_REACHED)finish();});
       if(screen){DisplayMetrics m=getResources().getDisplayMetrics();float scale=Math.min(1f,1920f/Math.max(m.widthPixels,m.heightPixels));int width=Math.max(2,((int)(m.widthPixels*scale)/2)*2),height=Math.max(2,((int)(m.heightPixels*scale)/2)*2);recorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264);recorder.setVideoSize(width,height);recorder.setVideoFrameRate(30);recorder.setVideoEncodingBitRate(4000000);recorder.prepare();
         Intent permission=intent.getParcelableExtra("permission");if(permission==null)throw new Exception("Chưa cho phép quay màn hình.");
         projection=((MediaProjectionManager)getSystemService(MEDIA_PROJECTION_SERVICE)).getMediaProjection(Activity.RESULT_OK,permission);
         projection.registerCallback(new MediaProjection.Callback(){@Override public void onStop(){finish();}},handler);
         display=projection.createVirtualDisplay("GocHopAm performance",width,height,m.densityDpi,DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,recorder.getSurface(),null,handler);
       }else recorder.prepare();
-      recorder.setMaxDuration(1800000);recorder.setOnInfoListener((r,what,extra)->{if(what==MediaRecorder.MEDIA_RECORDER_INFO_MAX_DURATION_REACHED)finish();});
       recorder.start();active=true;event("recording",null);
     }catch(Exception e){event("error",e.getMessage()==null?"Chưa bắt đầu được bản ghi.":e.getMessage());cleanup();stopSelf();}
     return START_NOT_STICKY;

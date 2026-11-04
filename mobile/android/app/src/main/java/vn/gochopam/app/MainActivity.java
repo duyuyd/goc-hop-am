@@ -123,7 +123,7 @@ public final class MainActivity extends Activity {
     videoPanel.addView(videoWeb,new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,LinearLayout.LayoutParams.MATCH_PARENT));
     layout.addView(videoPanel,0);arrange();
     String config=new JSONObject().put("id",id).put("origin",origin).toString();
-    String html=new String(read(getAssets().open("player.html"),200000),StandardCharsets.UTF_8).replace("<script id=\"goc-player-config\" type=\"application/json\">{}</script>","<script id=\"goc-player-config\" type=\"application/json\">"+config+"</script>").replace("<script src=\"player.js?v=120\"></script>","<script>"+new String(read(getAssets().open("player.js"),200000),StandardCharsets.UTF_8)+"</script>");
+    String html=new String(read(getAssets().open("player.html"),200000),StandardCharsets.UTF_8).replace("<script id=\"goc-player-config\" type=\"application/json\">{}</script>","<script id=\"goc-player-config\" type=\"application/json\">"+config+"</script>").replace("<script src=\"player.js?v=121\"></script>","<script>"+new String(read(getAssets().open("player.js"),200000),StandardCharsets.UTF_8)+"</script>");
     videoWeb.loadDataWithBaseURL(origin+"/",html,"text/html","UTF-8",null);
   }
   private void arrange(){landscape[0]=getResources().getConfiguration().orientation==Configuration.ORIENTATION_LANDSCAPE;layout.setOrientation(landscape[0]?LinearLayout.HORIZONTAL:LinearLayout.VERTICAL);web.setLayoutParams(new LinearLayout.LayoutParams(landscape[0]?0:LinearLayout.LayoutParams.MATCH_PARENT,landscape[0]?LinearLayout.LayoutParams.MATCH_PARENT:0,1));if(videoPanel!=null)videoPanel.setLayoutParams(new LinearLayout.LayoutParams(landscape[0]?Math.max(dp(220),getResources().getDisplayMetrics().widthPixels/2):LinearLayout.LayoutParams.MATCH_PARENT,landscape[0]?LinearLayout.LayoutParams.MATCH_PARENT:dp(200)));}
@@ -144,7 +144,7 @@ public final class MainActivity extends Activity {
     }
   }
   private JSONObject api(String path)throws Exception{
-    if(path.length()>2000||!path.matches("/api/(catalog|reader)\\?[^\\r\\n#]*"))throw new Exception("Yêu cầu không hợp lệ.");
+    if(path.length()>2000||!path.matches("/api/(catalog|reader|video-captions)\\?[^\\r\\n#]*"))throw new Exception("Yêu cầu không hợp lệ.");
     HttpURLConnection c=(HttpURLConnection)new URL(API+path).openConnection();
     c.setConnectTimeout(10000);c.setReadTimeout(20000);c.setInstanceFollowRedirects(false);
     c.setRequestProperty("Accept","application/json");c.setRequestProperty("User-Agent","GocHopAmAndroid/1.2");
@@ -198,7 +198,7 @@ public final class MainActivity extends Activity {
             case "videoExternal":String videoId=args.optString("id","");if(!videoId.matches("[A-Za-z0-9_-]{11}"))throw new Exception("Video không hợp lệ.");closeVideo(true);startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("https://www.youtube.com/watch?v="+videoId)));break;
             case "awake":if(args.optBoolean("enabled"))getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);break;
             case "metronome":if(args.optBoolean("running")){int bpm=Math.max(40,Math.min(240,args.optInt("bpm",80))),beats=args.optInt("beats",4);if(beats!=2&&beats!=3&&beats!=4&&beats!=6)beats=4;startMetro(bpm,beats);}else stopMetro();break;
-            case "share":String text=args.optString("text","");if(text.length()>800)throw new Exception("Nội dung quá dài.");Intent send=new Intent(Intent.ACTION_SEND);send.setType("text/plain");send.putExtra(Intent.EXTRA_TEXT,text);startActivity(Intent.createChooser(send,"Chia sẻ bài hát"));break;
+            case "share":String text=args.optString("text","");String sharedUrl=args.optString("url","");if(!sharedUrl.isEmpty()){Uri link=Uri.parse(sharedUrl);if(!"https".equals(link.getScheme())||!"gochopam.pages.dev".equals(link.getHost())||!"/".equals(link.getPath()))throw new Exception("Liên kết không hợp lệ.");text+="\n"+sharedUrl;}if(text.length()>2000)throw new Exception("Nội dung quá dài.");Intent send=new Intent(Intent.ACTION_SEND);send.setType("text/plain");send.putExtra(Intent.EXTRA_TEXT,text);startActivity(Intent.createChooser(send,"Chia sẻ bài hát"));break;
             case "github":startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("https://github.com/duyuyd/goc-hop-am")));break;
             case "help":startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(API+"/huong-dan")));break;
             default:throw new Exception("Thao tác không được hỗ trợ.");
@@ -207,7 +207,7 @@ public final class MainActivity extends Activity {
       }catch(Exception ignored){}
     }
   }
-  @Override public void onPause(){super.onPause();if(studio.pending()||singing.pending()){if(videoPorts!=null)videoPorts[0].postMessage(new WebMessage("{\"command\":\"pause\"}"));return;}stopSpeech();closeVideo(true);stopMetro();getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);web.evaluateJavascript("window.dispatchEvent(new Event('nativePause'))",null);web.onPause();}
+  @Override public void onPause(){super.onPause();studio.onPause();if(studio.pending()||singing.pending()){return;}stopSpeech();closeVideo(true);stopMetro();getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);web.evaluateJavascript("window.dispatchEvent(new Event('nativePause'))",null);web.onPause();}
   @Override public void onResume(){super.onResume();if(web!=null)web.onResume();}
-  @Override public void onDestroy(){destroyed=true;stopSpeech();closeVideo(false);stopMetro();clock.shutdownNow();network.shutdownNow();if(tone!=null){tone.release();tone=null;}web.removeJavascriptInterface("GocAndroid");web.destroy();super.onDestroy();}
+  @Override public void onDestroy(){studio.onPause();destroyed=true;stopSpeech();closeVideo(false);stopMetro();clock.shutdownNow();network.shutdownNow();if(tone!=null){tone.release();tone=null;}web.removeJavascriptInterface("GocAndroid");web.destroy();super.onDestroy();}
 }

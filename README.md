@@ -1,4 +1,4 @@
-# Góc Hợp Âm · Android & iOS 1.2.0
+# Góc Hợp Âm · Android & iOS 1.2.1
 
 **Tác giả dự án & người lập trình: Nguyễn Phan Thế Duy.**
 
@@ -9,17 +9,21 @@ Tra bài hát, đọc hợp âm, đổi tông, lưu ngoại tuyến và tập c�
 - [Bản phát hành](https://github.com/duyuyd/goc-hop-am/releases)
 - [Trạng thái biên dịch thực tế](https://github.com/duyuyd/goc-hop-am/actions)
 
-## Bản 1.2
+## Bản 1.2.1
 
-Giao diện đọc lời thu gọn; YouTube hiển thị riêng phía trên (xoay ngang để đọc cạnh video). Theo lời bằng thời gian thật của video: nhập LRC hoặc đánh dấu từng câu. Nhận giọng tiếng Việt trên máy là chế độ thử nghiệm, chỉ hoạt động khi thiết bị có mô hình hỗ trợ; không tự chuyển sang nhận giọng đám mây.
+Giao diện đọc lời thu gọn; YouTube hiển thị riêng phía trên (xoay ngang để đọc cạnh video). Theo lời bằng thời gian thật và phụ đề công khai của chính video YouTube, không dùng micro. Khi video thiếu phụ đề khớp lời, có thể nhập LRC hoặc đánh dấu từng câu; không đoán mốc theo độ dài bài hát.
 
 Phòng thu: thu âm micro, quay màn hình và micro, camera trước, hoặc màn hình cùng camera trước. Chỉ bắt đầu sau thao tác và quyền của người dùng. Bản ghi lưu trên thiết bị; bấm Lưu tệp/Chia sẻ để xuất. Không tự gửi bản ghi hay giọng nói lên website hoặc GitHub. Nội dung được bảo vệ có thể bị hệ điều hành chặn ghi hình; âm thanh được thu từ micro.
 
-Chưa kiểm thử đủ mọi loại điện thoại. Hãy thử bản ghi ngắn trước. Bản web lưu bản ghi trong phiên mở trang; ứng dụng cài đặt lưu tệp riêng bền vững trên thiết bị.
+Chưa kiểm thử đủ mọi loại điện thoại. Hãy thử bản ghi ngắn trước. Bản web lưu bản ghi trong IndexedDB của trình duyệt; ứng dụng cài đặt lưu tệp riêng bền vững trên thiết bị.
+
+Bản 1.2.1 sửa thứ tự cấu hình bộ ghi Android và dùng Camera2 để quay camera trước trực tiếp, không phụ thuộc getUserMedia của WebView. Bản ghi trên web có thông báo riêng khi trình duyệt thiếu khả năng quay màn hình.
+
+© 2026 Nguyễn Phan Thế Duy. Xem [Thông tin tác giả](COPYRIGHT.md). Chữ “chưa ký” của IPA/AAB là trạng thái kỹ thuật gói cài đặt.
 
 ## Android
 
-Android 8 trở lên. APK phát hành trực tiếp dùng gói `vn.gochopam.app.preview`; cùng khóa ký các bản 1.0/1.1, versionCode 3 để cập nhật giữ bài đã lưu. Khóa ký không nằm trong kho này. Đây là bản thử nghiệm, chưa phát hành trên CH Play.
+Android 8 trở lên. APK phát hành trực tiếp dùng gói `vn.gochopam.app.preview`; cùng khóa ký các bản 1.0/1.1, versionCode 4 để cập nhật giữ bài đã lưu. Khóa ký không nằm trong kho này. Đây là bản thử nghiệm, chưa phát hành trên CH Play.
 
 ```sh
 node mobile/scripts/prepare-web.mjs

@@ -143,7 +143,7 @@ final class MusicViewController: UIViewController, WKScriptMessageHandler, WKNav
         guard let templateURL = Bundle.main.url(forResource: "player.html", withExtension: nil), let scriptURL = Bundle.main.url(forResource: "player.js", withExtension: nil) else { throw URLError(.fileDoesNotExist) }
         let configData = try JSONSerialization.data(withJSONObject: ["id": id, "origin": origin])
         let json = String(data: configData, encoding: .utf8)!
-        let html = try String(contentsOf: templateURL, encoding: .utf8).replacingOccurrences(of: "<script id=\"goc-player-config\" type=\"application/json\">{}</script>", with: "<script id=\"goc-player-config\" type=\"application/json\">\(json)</script>").replacingOccurrences(of: "<script src=\"player.js?v=120\"></script>", with: "<script>\(try String(contentsOf: scriptURL, encoding: .utf8))</script>")
+        let html = try String(contentsOf: templateURL, encoding: .utf8).replacingOccurrences(of: "<script id=\"goc-player-config\" type=\"application/json\">{}</script>", with: "<script id=\"goc-player-config\" type=\"application/json\">\(json)</script>").replacingOccurrences(of: "<script src=\"player.js?v=121\"></script>", with: "<script>\(try String(contentsOf: scriptURL, encoding: .utf8))</script>")
         player.loadHTMLString(html, baseURL: URL(string: origin + "/"))
     }
     func emit(_ hook: String, _ value: [String: Any]) { guard let data = try? JSONSerialization.data(withJSONObject: value), let json = String(data: data, encoding: .utf8) else { return }; web.evaluateJavaScript("window.\(hook) && window.\(hook)(\(json))", completionHandler: nil) }
@@ -170,7 +170,7 @@ final class MusicViewController: UIViewController, WKScriptMessageHandler, WKNav
                 closeVideo(notify: true)
                 UIApplication.shared.open(URL(string: "https://www.youtube.com/watch?v=" + videoID)!)
             case "api":
-                guard let path = args["path"] as? String, path.count < 2000, path.range(of: "^/api/(catalog|reader)\\?[^\\r\\n#]*$", options: .regularExpression) != nil, let url = URL(string: apiOrigin + path) else { reply(id, false, "Yêu cầu không hợp lệ."); return }
+                guard let path = args["path"] as? String, path.count < 2000, path.range(of: "^/api/(catalog|reader|video-captions)\\?[^\\r\\n#]*$", options: .regularExpression) != nil, let url = URL(string: apiOrigin + path) else { reply(id, false, "Yêu cầu không hợp lệ."); return }
                 var request = URLRequest(url: url); request.setValue("application/json", forHTTPHeaderField: "Accept"); request.setValue("GocHopAmIOS/1.2", forHTTPHeaderField: "User-Agent")
                 session.dataTask(with: request) { [weak self] data, response, error in
                     guard let self = self else { return }
@@ -196,7 +196,9 @@ final class MusicViewController: UIViewController, WKScriptMessageHandler, WKNav
                 }
             case "share":
                 guard let text = args["text"] as? String, text.count <= 800 else { reply(id, false, "Nội dung quá dài."); return }
-                let share = UIActivityViewController(activityItems: [text], applicationActivities: nil)
+                let sharedURL = (args["url"] as? String).flatMap { URL(string: $0) }
+                let items: [Any] = sharedURL?.scheme == "https" && sharedURL?.host == "gochopam.pages.dev" ? [text, sharedURL!] : [text]
+                let share = UIActivityViewController(activityItems: items, applicationActivities: nil)
                 share.popoverPresentationController?.sourceView = web
                 share.popoverPresentationController?.sourceRect = CGRect(x: web.bounds.midX, y: 20, width: 1, height: 1)
                 present(share, animated: true)

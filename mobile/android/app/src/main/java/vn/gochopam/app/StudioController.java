@@ -15,6 +15,7 @@ import org.json.*;
 
 final class StudioController {
   private final MainActivity activity;
+  private final CameraRecorder camera;
   private static WeakReference<StudioController> current=new WeakReference<>(null);
   private String pendingId,pendingAction,pendingSave,pendingStop;
   private JSONObject pendingArgs;
@@ -24,16 +25,16 @@ final class StudioController {
   private String streamId;
   private FileOutputStream stream;
   private long streamBytes;
-  StudioController(MainActivity a){activity=a;current=new WeakReference<>(this);}
+  StudioController(MainActivity a){activity=a;camera=new CameraRecorder(a,this::event);current=new WeakReference<>(this);}
   boolean pending(){return permissionPending;}
-  boolean busy(){return StudioService.active||stream!=null;}
+  boolean busy(){return StudioService.active||stream!=null||camera.busy();}
   static void notifyEvent(JSONObject value){StudioController c=current.get();if(c!=null)c.activity.runOnUiThread(()->c.event(value));}
   private void event(JSONObject value){String state=value.optString("state");if("recording".equals(state)){if(pendingId!=null){activity.reply(pendingId,true,true);pendingId=null;}permissionPending=false;}
     if("stopped".equals(state)||"error".equals(state)){activity.setRequestedOrientation(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);if(pendingId!=null){activity.reply(pendingId,false,value.optString("error","Đã dừng."));pendingId=null;}if(pendingStop!=null){activity.reply(pendingStop,!"error".equals(state),value.optString("error","Đã lưu bản ghi."));pendingStop=null;}permissionPending=false;}
     activity.emit("GocRecordingEvent",value);
   }
   void start(String id,String action,JSONObject args){if(pendingId!=null||busy()){activity.reply(id,false,"Đã có một bản ghi hoặc yêu cầu đang chạy.");return;}pendingId=id;pendingAction=action;pendingArgs=args;permissionPending=true;activity.stopSpeech();
-    ArrayList<String> permissions=new ArrayList<>();boolean audio=args.optBoolean("audio",true),camera=args.optBoolean("camera",false);
+    ArrayList<String> permissions=new ArrayList<>();boolean audio=args.optBoolean("audio",true),camera=args.optBoolean("camera",false)||"camera".equals(args.optString("mode"));
     if(audio&&activity.checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED)permissions.add(Manifest.permission.RECORD_AUDIO);
     if(camera&&activity.checkSelfPermission(Manifest.permission.CAMERA)!=PackageManager.PERMISSION_GRANTED)permissions.add(Manifest.permission.CAMERA);
     if(!permissions.isEmpty())activity.requestPermissions(permissions.toArray(new String[0]),1210);else granted();
@@ -43,12 +44,14 @@ final class StudioController {
   private void granted(){try{
     if("recordPermission".equals(pendingAction)){armed=(pendingArgs.optBoolean("audio",true)?1:0)|(pendingArgs.optBoolean("camera",false)?2:0);activity.reply(pendingId,true,true);pendingId=null;permissionPending=false;}
     else if("recordScreenStart".equals(pendingAction)){activity.startActivityForResult(((MediaProjectionManager)activity.getSystemService(Context.MEDIA_PROJECTION_SERVICE)).createScreenCaptureIntent(),1211);}
+    else if("camera".equals(pendingArgs.optString("mode")))camera.start();
     else startService(null);
   }catch(Exception e){fail("Không mở được yêu cầu ghi trên thiết bị.");}}
   void webPermission(PermissionRequest request){activity.runOnUiThread(()->{ArrayList<String> allowed=new ArrayList<>();if("https://app.gochopam.local".equals(request.getOrigin().toString().replaceAll("/$",""))){for(String r:request.getResources()){if(PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(r)&&(armed&1)!=0&&activity.checkSelfPermission(Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED)allowed.add(r);if(PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(r)&&(armed&2)!=0&&activity.checkSelfPermission(Manifest.permission.CAMERA)==PackageManager.PERMISSION_GRANTED)allowed.add(r);}}armed=0;if(allowed.size()==request.getResources().length)request.grant(allowed.toArray(new String[0]));else request.deny();});}
   boolean activityResult(int code,int result,Intent data){if(code==1211){if(result!=Activity.RESULT_OK||data==null)fail("Bạn chưa cho phép quay màn hình.");else startService(data);return true;}if(code==1212){if(result==Activity.RESULT_OK&&data!=null&&pendingSave!=null){try{File f=safeFile(pendingSave);try(InputStream in=new FileInputStream(f);OutputStream out=activity.getContentResolver().openOutputStream(data.getData())){byte[] b=new byte[16384];int n;while((n=in.read(b))>0)out.write(b,0,n);}}catch(Exception e){activity.emit("GocRecordingEvent",error("Chưa lưu được bản sao."));}}pendingSave=null;return true;}return false;}
   private void startService(Intent permission){try{activity.setRequestedOrientation(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LOCKED);Intent intent=new Intent(activity,StudioService.class).putExtra("screen",permission!=null);if(permission!=null)intent.putExtra("permission",permission);activity.startForegroundService(intent);}catch(Exception e){fail("Chưa khởi động được bộ ghi. Hãy mở lại ứng dụng rồi thử.");}}
-  void stop(String id){if(!StudioService.active){activity.reply(id,true,true);return;}pendingStop=id;activity.startService(new Intent(activity,StudioService.class).setAction("STOP"));}
+  void onPause(){if(!permissionPending&&camera.busy())camera.stop();}
+  void stop(String id){if(camera.busy()){pendingStop=id;camera.stop();return;}if(!StudioService.active){activity.reply(id,true,true);return;}pendingStop=id;activity.startService(new Intent(activity,StudioService.class).setAction("STOP"));}
   synchronized JSONObject create(JSONObject args)throws Exception{if(busy())throw new Exception("Đã có bản ghi đang chạy.");String mime=args.getString("mime");if(!mime.matches("(?:audio|video)/(?:webm|mp4)(?:;codecs=[a-z0-9,.-]+)?"))throw new Exception("Định dạng không được hỗ trợ.");streamId=UUID.randomUUID().toString();String ext=mime.startsWith("audio/mp4")?"m4a":mime.contains("mp4")?"mp4":"webm";finalStreamFile=new File(StudioService.directory(activity),"GocHopAm-"+System.currentTimeMillis()+"-"+streamId.substring(0,8)+"."+ext);streamFile=new File(finalStreamFile.getPath()+".part");stream=new FileOutputStream(streamFile);streamBytes=0;return new JSONObject().put("id",streamId);}
   synchronized void chunk(JSONObject args)throws Exception{if(stream==null||!args.optString("id").equals(streamId))throw new Exception("Bản ghi không còn hoạt động.");String encoded=args.getString("data");if(encoded.length()>600000)throw new Exception("Gói dữ liệu quá lớn.");byte[] data=Base64.decode(encoded,Base64.DEFAULT);if(streamBytes+data.length>300000000)throw new Exception("Bản ghi đã đạt giới hạn dung lượng.");stream.write(data);streamBytes+=data.length;}
   synchronized void abort(){try{if(stream!=null)stream.close();}catch(Exception ignored){}stream=null;streamId=null;if(streamFile!=null)streamFile.delete();streamFile=null;finalStreamFile=null;}
