@@ -1,0 +1,1 @@
+{"name":"goc-hop-am-mobile","version":"1.2.0","private":true,"type":"module","scripts":{"test":"node --test tests/mobile.test.mjs","prepare":"node mobile/scripts/prepare-web.mjs"}}

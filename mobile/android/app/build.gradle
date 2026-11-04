@@ -1,0 +1,22 @@
+plugins { id 'com.android.application' }
+android {
+  namespace 'vn.gochopam.app'
+  compileSdk 36
+  defaultConfig { applicationId 'vn.gochopam.app'; minSdk 26; targetSdk 36; versionCode 3; versionName '1.2.0' }
+  sourceSets { main { assets.srcDirs = ['../../../public/mobile'] } }
+  compileOptions { sourceCompatibility JavaVersion.VERSION_11; targetCompatibility JavaVersion.VERSION_11 }
+  buildTypes { release { minifyEnabled false } }
+}
+// Keep the SDK-only builder's manifest and generate a namespace-free AGP input.
+def generatedManifest = layout.buildDirectory.file('generated/goc/AndroidManifest.xml')
+tasks.register('prepareGocManifest') {
+  inputs.file('src/main/AndroidManifest.xml')
+  outputs.file(generatedManifest)
+  doLast {
+    def output = generatedManifest.get().asFile
+    output.parentFile.mkdirs()
+    output.text = file('src/main/AndroidManifest.xml').getText('UTF-8').replace(' package="vn.gochopam.app"', '')
+  }
+}
+android.sourceSets.main.manifest.srcFile(generatedManifest)
+tasks.named('preBuild').configure { dependsOn('prepareGocManifest') }
