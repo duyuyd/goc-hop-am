@@ -22,7 +22,7 @@ jobs:
         run: |
           node mobile/scripts/prepare-web.mjs
           node --check public/mobile/bundle.js
-          node --test tests/mobile.test.mjs tests/video-captions.test.mjs
+          node --test tests/mobile.test.mjs tests/video-captions.test.mjs tests/music-tools.test.mjs
       - name: Build iOS Simulator
         run: |
           xcodebuild -project mobile/ios/GocHopAm.xcodeproj -scheme GocHopAm -configuration Debug -destination 'generic/platform=iOS Simulator' -derivedDataPath mobile/build/ios-simulator CODE_SIGNING_ALLOWED=NO build
@@ -117,5 +117,5 @@ jobs:
             echo "Version already released; leaving its assets unchanged."
             exit 0
           fi
-          gh release create "$RELEASE_TAG" --target "$GITHUB_SHA" --prerelease --title "Góc Hợp Âm 1.2.1 · Nguyễn Phan Thế Duy" --notes-file mobile/distribution/NOTES.md
+          gh release create "$RELEASE_TAG" --target "$GITHUB_SHA" --prerelease --title "Góc Hợp Âm 1.3.0 · NPT Duy" --notes-file mobile/distribution/NOTES.md
           gh release upload "$RELEASE_TAG" mobile/build/release/* --clobber

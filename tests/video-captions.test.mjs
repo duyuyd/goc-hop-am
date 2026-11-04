@@ -25,3 +25,27 @@ test('lyric position follows actual caption times, including pauses, seeks and r
  assert.equal(timedLine(timeline,3),null);assert.equal(timedLine(timeline,13),1);assert.equal(timedLine(timeline,6),0);assert.equal(timedLine(timeline,40),0);
  assert.deepEqual(captionTimeline(lines,[{start:1,text:'unrelated captions with no matching words'}]),[]);
 });
+test('later player responses and separate caption blocks are discovered',()=>{
+ const track={baseUrl:'https://www.youtube.com/api/timedtext?v='+id,languageCode:'vi'};
+ assert.deepEqual(captionTracks('var ytInitialPlayerResponse = {}; window["ytInitialPlayerResponse"] = '+JSON.stringify({captions:{playerCaptionsTracklistRenderer:{captionTracks:[track]}}})+';'),[track]);
+ assert.deepEqual(captionTracks(JSON.stringify({playerCaptionsTracklistRenderer:{captionTracks:[track]}})),[track]);
+});
+test('XML timedtext, srv3, SRT and VTT all retain actual caption timings',async()=>{
+ const {parseSubtitleCues,parseLrc}=await import('../public/mobile/follow.js');
+ assert.deepEqual(parseCaptionCues('<transcript><text start="2.5" dur="3">Mình &amp; bạn hát vui</text></transcript>'),[{start:2.5,duration:3,text:'Mình & bạn hát vui'}]);
+ assert.deepEqual(parseCaptionCues('<timedtext><body><p t="4500" d="2000"><s>Một câu hát</s></p></body></timedtext>'),[{start:4.5,duration:2,text:'Một câu hát'}]);
+ const srt='1\n00:00:05,500 --> 00:00:07,200\nMột ngày ta cùng chơi nhạc\n\n2\n00:00:12,000 --> 00:00:15,000\nCâu hát bay qua mùa nắng';
+ assert.equal(parseSubtitleCues(srt)[0].start,5.5);
+ assert.equal(parseSubtitleCues('WEBVTT\n\n00:05.500 --> 00:07.200\n<b>Một ngày ta cùng chơi nhạc</b>')[0].duration,1.7000000000000002);
+ assert.deepEqual(parseLrc(srt,['[C]Một ngày ta cùng chơi nhạc','[F]Câu hát bay qua mùa nắng']),[{time:5.5,line:0},{time:12,line:1}]);
+});
+test('unavailable responses are distinguished from missing tracks and can be retried',async()=>{
+ const another='NewVideo_01';let count=0;
+ const blocked=await videoCaptions(another,async()=>{count++;return new Response('blocked',{status:429})});
+ assert.equal(blocked.code,'blocked');
+ await videoCaptions(another,async()=>{count++;return new Response('<html>No captions here</html>')});assert.equal(count,2);
+ const html='var ytInitialPlayerResponse = '+JSON.stringify({captions:{playerCaptionsTracklistRenderer:{captionTracks:[{baseUrl:'https://www.youtube.com/api/timedtext?v=EmptyVideo1'}]}}});
+ // Independent video so the successful-cue cache cannot mask an empty upstream response.
+ const emptyId='EmptyVideo1';assert.equal(emptyId.length,11);
+ const empty=await videoCaptions(emptyId,async url=>new Response(url.includes('/watch?')?html:''));assert.equal(empty.code,'empty');
+});

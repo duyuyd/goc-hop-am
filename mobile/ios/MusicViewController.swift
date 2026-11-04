@@ -40,8 +40,12 @@ private final class BundledUI: NSObject, WKURLSchemeHandler {
     func webView(_ webView: WKWebView, stop urlSchemeTask: WKURLSchemeTask) {}
 }
 
-final class MusicViewController: UIViewController, WKScriptMessageHandler, WKNavigationDelegate {
+final class MusicViewController: UIViewController, WKScriptMessageHandler, WKNavigationDelegate, UIDocumentPickerDelegate {
     private var web: WKWebView!
+    private var documentRequest: String?
+    private var printingSheet = false
+    private var videoExtent: CGFloat = 200
+    private var readingAudio = false
     private lazy var performance = PerformanceController(owner: self)
     var recordingPreviewHost: UIView { web }
     private let layoutStack = UIStackView()
@@ -100,7 +104,7 @@ final class MusicViewController: UIViewController, WKScriptMessageHandler, WKNav
         if (layoutStack.axis == .horizontal) != horizontal || videoSize == nil {
             videoSize?.isActive = false
             layoutStack.axis = horizontal ? .horizontal : .vertical
-            videoSize = horizontal ? panel.widthAnchor.constraint(equalTo: layoutStack.widthAnchor, multiplier: 0.5) : panel.heightAnchor.constraint(equalToConstant: 200)
+            videoSize = horizontal ? panel.widthAnchor.constraint(equalTo: layoutStack.widthAnchor, multiplier: min(0.65, max(0.25, videoExtent / max(1, view.bounds.width)))) : panel.heightAnchor.constraint(equalToConstant: videoExtent)
             videoSize?.isActive = true
         }
     }
@@ -161,6 +165,41 @@ final class MusicViewController: UIViewController, WKScriptMessageHandler, WKNav
         if performance.handle(id: id, action: action, args: args) { return }
         do {
             switch action {
+            case "videoLayout":
+                videoExtent = CGFloat(max(200, min(420, args["size"] as? Int ?? 200)))
+                videoSize?.isActive = false; videoSize = nil; view.setNeedsLayout(); view.layoutIfNeeded()
+            case "sheetSource":
+                let sources = ["musescore": "https://musescore.com/sheetmusic", "imslp": "https://imslp.org/", "musopen": "https://musopen.org/sheetmusic/"]
+                guard let source = args["source"] as? String, let target = sources[source], let url = URL(string: target) else { reply(id, false, "Nguồn không hợp lệ."); return }
+                UIApplication.shared.open(url)
+            case "readAudio":
+                guard documentRequest == nil else { reply(id, false, "Đang chọn một tệp khác."); return }
+                documentRequest = id; readingAudio = true
+                let audioPicker = UIDocumentPickerViewController(documentTypes: ["public.audio"], in: .import)
+                audioPicker.delegate = self; audioPicker.allowsMultipleSelection = false
+                present(audioPicker, animated: true); return
+            case "readText":
+                guard documentRequest == nil else { reply(id, false, "Đang chọn một tệp khác."); return }
+                documentRequest = id; readingAudio = false
+                let picker = UIDocumentPickerViewController(documentTypes: ["public.text", "public.json", "public.data"], in: .import)
+                picker.delegate = self; picker.allowsMultipleSelection = false
+                present(picker, animated: true); return
+            case "saveText":
+                guard let text = args["text"] as? String, let bytes = text.data(using: .utf8), bytes.count <= 250_000 else { reply(id, false, "Tệp quá lớn."); return }
+                let file = FileManager.default.temporaryDirectory.appendingPathComponent("Goc_Hop_Am_Sheet.json")
+                try bytes.write(to: file, options: .atomic)
+                let export = UIActivityViewController(activityItems: [file], applicationActivities: nil)
+                export.popoverPresentationController?.sourceView = web
+                export.popoverPresentationController?.sourceRect = CGRect(x: web.bounds.midX, y: 20, width: 1, height: 1)
+                present(export, animated: true)
+            case "printSheet":
+                guard let html = args["html"] as? String, html.utf8.count <= 500_000 else { reply(id, false, "Bản in quá lớn."); return }
+                let printController = UIPrintInteractionController.shared
+                let info = UIPrintInfo(dictionary: nil); info.outputType = .general; info.jobName = "Góc Hợp Âm - Sheet"
+                printController.printInfo = info
+                printController.printFormatter = UIMarkupTextPrintFormatter(markupText: html)
+                printingSheet = true
+                printController.present(animated: true) { [weak self] _, _, _ in self?.printingSheet = false }
             case "video":
                 guard let videoID = args["id"] as? String else { reply(id, false, "Video không hợp lệ."); return }
                 try showVideo(id: videoID)
@@ -209,6 +248,24 @@ final class MusicViewController: UIViewController, WKScriptMessageHandler, WKNav
             reply(id, true, true)
         } catch { reply(id, false, "Chưa thực hiện được thao tác trên thiết bị.") }
     }
+    func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+        if let id = documentRequest { reply(id, true, "") }; documentRequest = nil; readingAudio = false
+    }
+    func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+        guard let id = documentRequest else { return }; documentRequest = nil
+        let audio = readingAudio; readingAudio = false
+        guard let url = urls.first else { reply(id, true, ""); return }
+        let access = url.startAccessingSecurityScopedResource(); defer { if access { url.stopAccessingSecurityScopedResource() } }
+        do {
+            let limit = audio ? 3_000_000 : 250_000
+            let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? (limit + 1)
+            guard size <= limit else { reply(id, false, "Chọn tệp văn bản dưới 250 KB."); return }
+            let bytes = try Data(contentsOf: url)
+            if audio { guard bytes.count <= limit else { reply(id, false, "Tệp âm thanh quá lớn."); return }; reply(id, true, ["base64": bytes.base64EncodedString()]); return }
+            guard bytes.count <= 250_000, let text = String(data: bytes, encoding: .utf8) else { reply(id, false, "Tệp cần dùng mã UTF-8."); return }
+            reply(id, true, text)
+        } catch { reply(id, false, "Chưa đọc được tệp đã chọn.") }
+    }
     private func clickSound(frequency: Double) -> Data {
         let rate: UInt32 = 22050, samples = 1212
         var pcm = Data()
@@ -241,7 +298,7 @@ final class MusicViewController: UIViewController, WKScriptMessageHandler, WKNav
     }
     private func stopMetro() { timer?.cancel(); timer = nil; players.forEach { $0.stop() } }
     @objc private func pause() {
-        if performance.permissionPending { return }
+        if performance.permissionPending || documentRequest != nil || printingSheet { return }
         performance.stopSpeech(); closeVideo(notify: true); stopMetro(); UIApplication.shared.isIdleTimerDisabled = false
         web.evaluateJavaScript("window.dispatchEvent(new Event('nativePause'))", completionHandler: nil)
     }

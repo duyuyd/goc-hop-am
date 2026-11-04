@@ -18,7 +18,7 @@ function call(action,args={}){
   if(action==='share')return navigator.share?navigator.share({title:args.title,text:args.text,url:args.url}):Promise.reject(new Error('Thiết bị chưa hỗ trợ chia sẻ.'));
   return Promise.resolve(true);
  }
- return new Promise((resolve,reject)=>{const id=String(++seq),timer=setTimeout(()=>{pending.delete(id);reject(new Error('Yêu cầu quá lâu. Hãy kiểm tra mạng rồi thử lại.'))},(['recordPermission','recordScreenStart','recordStart','speechStart'].includes(action)?180000:25000));pending.set(id,{resolve,reject,timer});const message={id,action,args};try{window.GocAndroid?window.GocAndroid.postMessage(JSON.stringify(message)):window.webkit.messageHandlers.goc.postMessage(message)}catch(error){clearTimeout(timer);pending.delete(id);reject(error)}});
+ return new Promise((resolve,reject)=>{const id=String(++seq),timer=setTimeout(()=>{pending.delete(id);reject(new Error('Yêu cầu quá lâu. Hãy kiểm tra mạng rồi thử lại.'))},(['recordPermission','recordScreenStart','recordStart','speechStart','readText','readAudio','saveText','printSheet'].includes(action)?180000:25000));pending.set(id,{resolve,reject,timer});const message={id,action,args};try{window.GocAndroid?window.GocAndroid.postMessage(JSON.stringify(message)):window.webkit.messageHandlers.goc.postMessage(message)}catch(error){clearTimeout(timer);pending.delete(id);reject(error)}});
 }
 let offline=Object.create(null),current=null,shift=0,font=20,request=0,opening=0,page=0,hasMore=false,mode='home',tab='library',scrollFrame=0,scrollTime=0,scrollCarry=0,metroRunning=false;
 let currentVideo=null,videoRequest=0;
@@ -65,7 +65,7 @@ $('bpm').addEventListener('input',updateMetro);$('beats').addEventListener('chan
 let taps=[];$('tap-tempo').addEventListener('click',()=>{const now=Date.now();if(taps.length&&now-taps.at(-1)>2000)taps=[];taps.push(now);taps=taps.slice(-6);if(taps.length>1){$('bpm').value=bpmValue(60000*(taps.length-1)/(now-taps[0]));updateMetro()}});
 $('help').addEventListener('click',()=>call('help').catch(error=>toast(error.message)));
 $('clear-saved').addEventListener('click',()=>$('clear-confirm').hidden=false);$('cancel-clear').addEventListener('click',()=>$('clear-confirm').hidden=true);$('confirm-clear').addEventListener('click',async()=>{try{await call('save',{value:'{}'});offline=Object.create(null);refreshSaved();saveLabel();$('clear-confirm').hidden=true;toast('Đã xóa bài ngoại tuyến trên thiết bị.')}catch(error){toast(error.message)}});
-function pause(){if(studio.permissionPending||follow.permissionPending)return;follow.stop();studio.onHide();closeVideo();stopScroll();metroRunning=false;stopWebMetro();call('metronome',{running:false,bpm:80,beats:4}).catch(()=>{});call('awake',{enabled:false}).catch(()=>{});metroLabel()}
+function pause(){if(studio.permissionPending||follow.permissionPending||musicTools.permissionPending)return;follow.stop();studio.onHide();closeVideo();stopScroll();metroRunning=false;stopWebMetro();call('metronome',{running:false,bpm:80,beats:4}).catch(()=>{});call('awake',{enabled:false}).catch(()=>{});metroLabel()}
 document.addEventListener('visibilitychange',()=>{if(document.hidden)pause()});window.addEventListener('nativePause',pause);window.addEventListener('pagehide',pause);
 beatLights();call('load').then(value=>{try{offline=offlineLibrary(JSON.parse(value))}catch{toast('Chưa đọc được thư viện ngoại tuyến.')}refreshSaved()}).catch(error=>toast(error.message));loadCatalog();
 
@@ -77,4 +77,12 @@ $('reader-options-close').addEventListener('click',()=>$('reader-options').open=
 
 $('github').addEventListener('click',()=>native?call('github'):window.open('https://github.com/duyuyd/goc-hop-am','_blank','noopener'));
 
-$('share-app').addEventListener('click',()=>call('share',{title:'Góc Hợp Âm',text:'Cùng tìm hợp âm và tập hát trên Góc Hợp Âm · Nguyễn Phan Thế Duy',url:'https://gochopam.pages.dev/'}).catch(error=>toast(error.message)));
+$('share-app').addEventListener('click',()=>call('share',{title:'Góc Hợp Âm',text:'Cùng tìm hợp âm và tập hát trên Góc Hợp Âm · NPT Duy',url:'https://gochopam.pages.dev/'}).catch(error=>toast(error.message)));
+
+const musicTools=createMusicTools({native,call,toast,getSong:()=>current});
+$('music-open').addEventListener('click',()=>musicTools.open());$('reader-sheet').addEventListener('click',()=>musicTools.printLyrics());
+
+if(!native&&'serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('/service-worker.js').catch(()=>{});
+
+function videoSize(){const size=Math.max(200,Math.min(420,Number($('video-size-mobile').value)||200));if(native)call('videoLayout',{size}).catch(error=>toast(error.message));else{$('video-mount').style.height=size+'px';$('video-mount').style.aspectRatio='auto'}}
+$('video-size-mobile').addEventListener('input',videoSize);$('video-compact-mobile').addEventListener('click',()=>{$('video-size-mobile').value=200;videoSize();$('reader-options').open=false;$('video-options').open=false});

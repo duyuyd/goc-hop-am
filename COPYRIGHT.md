@@ -1,8 +1,8 @@
 # Góc Hợp Âm — thông tin tác giả
 
-© 2026 Nguyễn Phan Thế Duy.
+© 2026 NPT Duy.
 
-**Tác giả dự án & người lập trình: Nguyễn Phan Thế Duy.**
+**Tác giả dự án & người lập trình: NPT Duy.**
 
 Thông tin này áp dụng cho phần mã và giao diện gốc của dự án Góc Hợp Âm. Các quyền đối với phần gốc được tác giả giữ lại. Việc công khai mã nguồn hoặc cung cấp bản cài thử miễn phí không thay đổi tên tác giả hoặc tự cấp quyền sử dụng lại phần gốc của dự án.
 

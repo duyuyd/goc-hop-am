@@ -1,6 +1,6 @@
-# Góc Hợp Âm · Android & iOS 1.2.1
+# Góc Hợp Âm · Android & iOS 1.3.0
 
-**Tác giả dự án & người lập trình: Nguyễn Phan Thế Duy.**
+**Tác giả dự án & người lập trình: NPT Duy.**
 
 Tra bài hát, đọc hợp âm, đổi tông, lưu ngoại tuyến và tập cùng YouTube.
 
@@ -9,21 +9,22 @@ Tra bài hát, đọc hợp âm, đổi tông, lưu ngoại tuyến và tập c�
 - [Bản phát hành](https://github.com/duyuyd/goc-hop-am/releases)
 - [Trạng thái biên dịch thực tế](https://github.com/duyuyd/goc-hop-am/actions)
 
-## Bản 1.2.1
+## Bản 1.3.0
 
-Giao diện đọc lời thu gọn; YouTube hiển thị riêng phía trên (xoay ngang để đọc cạnh video). Theo lời bằng thời gian thật và phụ đề công khai của chính video YouTube, không dùng micro. Khi video thiếu phụ đề khớp lời, có thể nhập LRC hoặc đánh dấu từng câu; không đoán mốc theo độ dài bài hát.
+- Đọc phụ đề JSON3, XML, SRT, VTT và LRC; sửa nhận dữ liệu YouTube và báo rõ trường hợp bị chặn / rỗng / không có phụ đề. Phụ đề chèn vào hình không phải tệp mốc lời. Có chọn tệp, chỉnh lệch mốc và đánh dấu câu; không dùng micro để đoán lời video.
+- Kéo chỉnh khung YouTube 200–420 px để chừa chỗ đọc lời. Khung video vẫn hiển thị khi nghe.
+- 144 hợp âm có tiếng mẫu, gam trưởng và vòng hòa âm; piano chạm để chơi và sáng theo nốt khi phát sheet.
+- Soạn sheet một bè nhịp 4/4, in / lưu PDF, sao lưu JSON và chỉnh từng nốt. Nhận sheet nháp từ tệp hát/đàn một bè: dưới 3 MB, tối đa 60 giây / 128 nốt mỗi lần. Xử lý trên máy, cần nghe lại và chỉnh, không nhận chính xác bản phối nhiều nhạc cụ.
+- Nhật ký luyện tập trên máy; liên kết mở MuseScore, IMSLP và Musopen để tìm sheet. Chưa nhập toàn bộ thư viện bên ngoài.
+- Website có thể thêm ra màn hình chính. Bài đã lưu và công cụ luyện nhạc mở ngoại tuyến sau lần tải đầu; YouTube và tra cứu trực tuyến cần mạng.
 
-Phòng thu: thu âm micro, quay màn hình và micro, camera trước, hoặc màn hình cùng camera trước. Chỉ bắt đầu sau thao tác và quyền của người dùng. Bản ghi lưu trên thiết bị; bấm Lưu tệp/Chia sẻ để xuất. Không tự gửi bản ghi hay giọng nói lên website hoặc GitHub. Nội dung được bảo vệ có thể bị hệ điều hành chặn ghi hình; âm thanh được thu từ micro.
+Phần thu âm, quay màn hình và camera của 1.2.1 được giữ nguyên. Bản ghi không tự tải lên website hoặc GitHub. Theo lời chỉ hoạt động tự động khi nhận được phụ đề công khai khớp với bài; có phụ đề hiển thị trong YouTube không bảo đảm máy chủ nhận được dữ liệu.
 
-Chưa kiểm thử đủ mọi loại điện thoại. Hãy thử bản ghi ngắn trước. Bản web lưu bản ghi trong IndexedDB của trình duyệt; ứng dụng cài đặt lưu tệp riêng bền vững trên thiết bị.
-
-Bản 1.2.1 sửa thứ tự cấu hình bộ ghi Android và dùng Camera2 để quay camera trước trực tiếp, không phụ thuộc getUserMedia của WebView. Bản ghi trên web có thông báo riêng khi trình duyệt thiếu khả năng quay màn hình.
-
-© 2026 Nguyễn Phan Thế Duy. Xem [Thông tin tác giả](COPYRIGHT.md). Chữ “chưa ký” của IPA/AAB là trạng thái kỹ thuật gói cài đặt.
+© 2026 NPT Duy. Xem [Thông tin tác giả](COPYRIGHT.md). Chữ “chưa ký” của IPA/AAB là trạng thái gói cài đặt.
 
 ## Android
 
-Android 8 trở lên. APK phát hành trực tiếp dùng gói `vn.gochopam.app.preview`; cùng khóa ký các bản 1.0/1.1, versionCode 4 để cập nhật giữ bài đã lưu. Khóa ký không nằm trong kho này. Đây là bản thử nghiệm, chưa phát hành trên CH Play.
+Android 8 trở lên. APK phát hành trực tiếp dùng gói `vn.gochopam.app.preview`; cùng khóa ký các bản 1.0/1.1, versionCode 5 để cập nhật giữ bài đã lưu. Khóa ký không nằm trong kho này. Đây là bản thử nghiệm, chưa phát hành trên CH Play.
 
 ```sh
 node mobile/scripts/prepare-web.mjs

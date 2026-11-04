@@ -45,6 +45,12 @@ public final class MainActivity extends Activity {
   private static final String LOCAL = "https://app.gochopam.local/";
   private static final String API = "https://gochopam.pages.dev";
   private WebView web;
+  private WebView printWeb;
+  private String textRequest=null;
+  private byte[] textOutput;
+  private boolean printing=false;
+  private int videoExtent=200;
+  private boolean readingAudio=false;
   private LinearLayout layout,videoPanel;
   private WebView videoWeb;
   private StudioController studio;
@@ -126,13 +132,13 @@ public final class MainActivity extends Activity {
     String html=new String(read(getAssets().open("player.html"),200000),StandardCharsets.UTF_8).replace("<script id=\"goc-player-config\" type=\"application/json\">{}</script>","<script id=\"goc-player-config\" type=\"application/json\">"+config+"</script>").replace("<script src=\"player.js?v=121\"></script>","<script>"+new String(read(getAssets().open("player.js"),200000),StandardCharsets.UTF_8)+"</script>");
     videoWeb.loadDataWithBaseURL(origin+"/",html,"text/html","UTF-8",null);
   }
-  private void arrange(){landscape[0]=getResources().getConfiguration().orientation==Configuration.ORIENTATION_LANDSCAPE;layout.setOrientation(landscape[0]?LinearLayout.HORIZONTAL:LinearLayout.VERTICAL);web.setLayoutParams(new LinearLayout.LayoutParams(landscape[0]?0:LinearLayout.LayoutParams.MATCH_PARENT,landscape[0]?LinearLayout.LayoutParams.MATCH_PARENT:0,1));if(videoPanel!=null)videoPanel.setLayoutParams(new LinearLayout.LayoutParams(landscape[0]?Math.max(dp(220),getResources().getDisplayMetrics().widthPixels/2):LinearLayout.LayoutParams.MATCH_PARENT,landscape[0]?LinearLayout.LayoutParams.MATCH_PARENT:dp(200)));}
+  private void arrange(){landscape[0]=getResources().getConfiguration().orientation==Configuration.ORIENTATION_LANDSCAPE;layout.setOrientation(landscape[0]?LinearLayout.HORIZONTAL:LinearLayout.VERTICAL);web.setLayoutParams(new LinearLayout.LayoutParams(landscape[0]?0:LinearLayout.LayoutParams.MATCH_PARENT,landscape[0]?LinearLayout.LayoutParams.MATCH_PARENT:0,1));if(videoPanel!=null)videoPanel.setLayoutParams(new LinearLayout.LayoutParams(landscape[0]?Math.max(dp(220),Math.min(getResources().getDisplayMetrics().widthPixels*2/3,dp(videoExtent))):LinearLayout.LayoutParams.MATCH_PARENT,landscape[0]?LinearLayout.LayoutParams.MATCH_PARENT:dp(videoExtent)));}
   @Override public void onConfigurationChanged(Configuration value){super.onConfigurationChanged(value);arrange();}
   void emit(String hook,JSONObject value){if(!destroyed)web.evaluateJavascript("window."+hook+" && window."+hook+"("+value.toString()+")",null);}
   void stopSpeech(){if(singing!=null)singing.stop();}
   boolean studioBusy(){return studio!=null&&studio.busy();}
   @Override public void onRequestPermissionsResult(int code,String[] names,int[] results){super.onRequestPermissionsResult(code,names,results);studio.permissions(code,names,results);singing.permissions(code,results);}
-  @Override protected void onActivityResult(int code,int result,Intent data){super.onActivityResult(code,result,data);studio.activityResult(code,result,data);}
+  @Override protected void onActivityResult(int code,int result,Intent data){super.onActivityResult(code,result,data);if(code==501||code==502){final String requestId=textRequest;final byte[] output=textOutput;final boolean audio=readingAudio;readingAudio=false;textRequest=null;textOutput=null;if(requestId==null)return;if(result!=RESULT_OK||data==null||data.getData()==null){reply(requestId,true,"");return;}final Uri uri=data.getData();network.execute(()->{try{if(code==501){try(InputStream in=getContentResolver().openInputStream(uri)){if(audio)reply(requestId,true,new JSONObject().put("base64",android.util.Base64.encodeToString(read(in,3000000),android.util.Base64.NO_WRAP)));else reply(requestId,true,new String(read(in,250000),StandardCharsets.UTF_8));}}else{try(java.io.OutputStream out=getContentResolver().openOutputStream(uri)){if(out==null||output==null)throw new Exception();out.write(output);}reply(requestId,true,true);}}catch(Exception e){reply(requestId,false,"Chưa đọc hoặc lưu được tệp văn bản (tối đa 250 KB).");}});return;}studio.activityResult(code,result,data);}
   @SuppressWarnings("deprecation") @Override public void onBackPressed(){back();}
   void reply(String id,boolean ok,Object value){
     final String encoded=value==null?"null":value instanceof JSONObject?value.toString():value instanceof Boolean?value.toString():JSONObject.quote(String.valueOf(value));
@@ -187,6 +193,12 @@ public final class MainActivity extends Activity {
           network.execute(()->{try{if(action.equals("api"))reply(requestId,true,api(args.getString("path")));else if(action.equals("load"))reply(requestId,true,loadLibrary());else{saveLibrary(args.getString("value"));reply(requestId,true,true);}}catch(Exception e){reply(requestId,false,e.getMessage());}});
         }else runOnUiThread(()->{try{
           switch(action){
+            case "videoLayout":videoExtent=Math.max(200,Math.min(420,args.optInt("size",200)));arrange();break;
+            case "sheetSource":String source=args.optString("source"),target=source.equals("musescore")?"https://musescore.com/sheetmusic":source.equals("imslp")?"https://imslp.org/":source.equals("musopen")?"https://musopen.org/sheetmusic/":null;if(target==null)throw new Exception();startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(target)));break;
+            case "readAudio":if(textRequest!=null)throw new Exception();textRequest=requestId;readingAudio=true;Intent pickAudio=new Intent(Intent.ACTION_OPEN_DOCUMENT);pickAudio.setType("audio/*");pickAudio.addCategory(Intent.CATEGORY_OPENABLE);try{startActivityForResult(pickAudio,501);}catch(Exception e){textRequest=null;readingAudio=false;throw e;}return;
+            case "readText":if(textRequest!=null)throw new Exception();textRequest=requestId;Intent pickText=new Intent(Intent.ACTION_OPEN_DOCUMENT);pickText.setType("*/*");pickText.addCategory(Intent.CATEGORY_OPENABLE);try{startActivityForResult(pickText,501);}catch(Exception e){textRequest=null;throw e;}return;
+            case "saveText":if(textRequest!=null)throw new Exception();String fileText=args.getString("text"),fileName=args.optString("name","Goc_Hop_Am_Sheet.json");if(fileText.getBytes(StandardCharsets.UTF_8).length>250000||!fileName.matches("[A-Za-z0-9_-]{1,80}\\.json"))throw new Exception();textRequest=requestId;textOutput=fileText.getBytes(StandardCharsets.UTF_8);Intent saveText=new Intent(Intent.ACTION_CREATE_DOCUMENT);saveText.setType("application/json");saveText.addCategory(Intent.CATEGORY_OPENABLE);saveText.putExtra(Intent.EXTRA_TITLE,fileName);try{startActivityForResult(saveText,502);}catch(Exception e){textRequest=null;textOutput=null;throw e;}return;
+            case "printSheet":String html=args.getString("html");if(html.length()>500000)throw new Exception();if(printWeb!=null)printWeb.destroy();printing=true;printWeb=new WebView(MainActivity.this);printWeb.getSettings().setAllowFileAccess(false);printWeb.getSettings().setAllowContentAccess(false);printWeb.setWebViewClient(new WebViewClient(){@Override public boolean shouldOverrideUrlLoading(WebView view,WebResourceRequest request){return true;}@Override public void onPageFinished(WebView view,String url){android.print.PrintManager manager=(android.print.PrintManager)getSystemService(PRINT_SERVICE);manager.print("Góc Hợp Âm - Sheet",view.createPrintDocumentAdapter("Goc_Hop_Am_Sheet"),new android.print.PrintAttributes.Builder().setMediaSize(android.print.PrintAttributes.MediaSize.ISO_A4).build());}});printWeb.loadDataWithBaseURL(LOCAL,html,"text/html","UTF-8",null);break;
             case "recordPermission":case "recordScreenStart":case "recordStart":studio.start(requestId,action,args);return;
             case "recordStop":studio.stop(requestId);return;
             case "recordings":reply(requestId,true,new JSONObject().put("items",studio.list()));return;
@@ -207,7 +219,7 @@ public final class MainActivity extends Activity {
       }catch(Exception ignored){}
     }
   }
-  @Override public void onPause(){super.onPause();studio.onPause();if(studio.pending()||singing.pending()){return;}stopSpeech();closeVideo(true);stopMetro();getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);web.evaluateJavascript("window.dispatchEvent(new Event('nativePause'))",null);web.onPause();}
-  @Override public void onResume(){super.onResume();if(web!=null)web.onResume();}
-  @Override public void onDestroy(){studio.onPause();destroyed=true;stopSpeech();closeVideo(false);stopMetro();clock.shutdownNow();network.shutdownNow();if(tone!=null){tone.release();tone=null;}web.removeJavascriptInterface("GocAndroid");web.destroy();super.onDestroy();}
+  @Override public void onPause(){super.onPause();studio.onPause();if(studio.pending()||singing.pending()||textRequest!=null||printing){return;}stopSpeech();closeVideo(true);stopMetro();getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);web.evaluateJavascript("window.dispatchEvent(new Event('nativePause'))",null);web.onPause();}
+  @Override public void onResume(){super.onResume();printing=false;if(web!=null)web.onResume();}
+  @Override public void onDestroy(){studio.onPause();destroyed=true;stopSpeech();closeVideo(false);stopMetro();clock.shutdownNow();network.shutdownNow();if(tone!=null){tone.release();tone=null;}if(printWeb!=null)printWeb.destroy();web.removeJavascriptInterface("GocAndroid");web.destroy();super.onDestroy();}
 }

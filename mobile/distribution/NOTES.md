@@ -1,16 +1,17 @@
-Tác giả dự án & người lập trình: **Nguyễn Phan Thế Duy**.
+Người phát triển: **NPT Duy**.
 
-Bản sửa 1.2.1:
+Bản thử nghiệm 1.3.0:
 
-- Sửa thứ tự cấu hình bộ ghi âm và quay màn hình Android; camera trước dùng Camera2 trực tiếp.
-- Theo lời dựa vào phụ đề và thời gian phát YouTube, không nghe micro người hát. Video không có phụ đề khớp cần LRC hoặc mốc đánh dấu.
-- Bản ghi trên web được lưu trong trình duyệt; thông báo rõ khi thiết bị không hỗ trợ kiểu ghi.
-- Thêm chia sẻ liên kết bài hát, giới thiệu tác giả và thông tin © 2026 Nguyễn Phan Thế Duy.
+- Sửa tìm và đọc phụ đề YouTube; hỗ trợ JSON3/XML và nhập LRC/SRT/VTT, chỉnh lệch mốc. Báo đúng dữ liệu rỗng, nguồn chưa truy cập được hoặc không tìm thấy phụ đề. Không hứa lấy được phụ đề cho mọi video.
+- Kéo chỉnh khung YouTube để chừa chỗ cho lời; giữ nguyên các tính năng ghi âm, camera và quay màn hình đang hoạt động.
+- Tra 144 hợp âm có phát thử, piano tương tác và phím sáng theo sheet.
+- Soạn sheet một bè 4/4, sửa nốt, phát lại, in/lưu PDF, nhập/xuất JSON.
+- Nhận giai điệu từ tệp hát/đàn một bè dưới 3 MB trên thiết bị: tối đa 60 giây và 128 nốt mỗi lần. Kết quả là sheet nháp cần nghe và chỉnh. Bản phối nhiều nhạc cụ có thể nhận sai. Không tải âm thanh lên máy chủ.
+- Ghi chú và nhật ký luyện tập; mở các thư viện MuseScore/IMSLP/Musopen. Chưa gom toàn bộ kho sheet bên ngoài.
+- Website hỗ trợ thêm ra màn hình chính và mở các công cụ đã tải khi mất mạng.
 
-**Android:** APK thử nghiệm versionCode 4, giữ gói và chữ ký thử nghiệm của các bản trước để cài cập nhật. Website tải miễn phí: https://gochopam.pages.dev/ung-dung/ . Không cần gỡ ứng dụng cũ.
+APK Android versionCode 5 giữ gói và chữ ký thử nghiệm để cài cập nhật. Tải tại https://gochopam.pages.dev/ung-dung/ . Chưa phát hành CH Play.
 
-**iOS:** tệp Simulator và IPA chưa ký được biên dịch từ chính commit của bản phát hành. IPA chưa ký không cài trực tiếp lên iPhone; chưa có bản App Store. Chữ “chưa ký” nói về chữ ký cài đặt, tác giả dự án vẫn là Nguyễn Phan Thế Duy.
+Bản iOS Simulator và IPA chưa ký được GitHub Actions biên dịch từ commit này nếu các kiểm tra thành công. IPA chưa ký chưa cài trực tiếp lên iPhone và chưa phải bản App Store. Có thể dùng ứng dụng web trên iPhone.
 
-Đã chạy kiểm tra mã và biên dịch. Các chức năng camera/micro/quay màn hình còn cần kiểm thử trên điện thoại thật; bản này được đánh dấu thử nghiệm. Không công bố số lượt cài đặt hoặc độ chính xác đồng bộ giả.
-
-Mã nguồn công khai không chứa khóa ký, tài khoản, bản ghi người dùng hoặc dữ liệu riêng. Xem COPYRIGHT.md để biết thông tin tác giả của phần mã/giao diện gốc.
+Mã nguồn không chứa khóa ký, tài khoản hay bản ghi riêng của người dùng. Nội dung bài hát, video và phụ thuộc giữ thông tin tác giả tương ứng.
