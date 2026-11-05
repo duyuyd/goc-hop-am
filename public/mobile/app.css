@@ -10,3 +10,26 @@
 .music-tools[open]{display:block;height:auto;overflow:auto}.music-tools .music-head,.music-tools .music-tabs{flex-shrink:0}.music-tools .music-tabs{min-height:44px;height:auto}
 
 #site-search{background:#e5bd79;color:#21192e;border-color:#e5bd79;font-weight:700;margin:10px 0 18px}
+.practice-keyboard-panel{margin:28px 0;background:var(--surface);border:1px solid var(--border);border-radius:24px;padding:24px 20px}
+.practice-keyboard-panel .heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px}
+.practice-keyboard-panel h2{margin:3px 0 0;font:500 20px/1.3 Georgia,serif}
+.practice-midi-status{font-size:12px;color:var(--gold);margin:4px 0 16px}
+.practice-monitor{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px}
+.monitor-box{background:#1a1423;border:1px solid var(--border);border-radius:14px;padding:12px 8px;text-align:center}
+.monitor-box small{display:block;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px}
+.monitor-box strong{display:block;margin-top:4px;font:700 20px/1.2 Georgia,serif;color:var(--gold);min-height:24px}
+.piano-roll-container{background:#140f1c;border:1px solid var(--border);border-radius:16px;padding:12px;margin-bottom:14px}
+.piano-roll-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.piano-roll-header small{color:var(--muted);font-size:11px}
+#piano-roll-canvas{display:block;width:100%;height:100px;background:#100c17;border-radius:10px}
+.practice-keyboard-wrap{overflow-x:auto;border-radius:14px;background:#120e18;padding:10px 6px;margin-bottom:14px}
+.practice-keyboard{position:relative;height:140px;min-width:540px;touch-action:none;user-select:none}
+.practice-key{position:absolute;top:0;height:136px;display:flex;align-items:end;justify-content:center;padding-bottom:10px;border:1px solid #b8b0bc;border-radius:0 0 6px 6px;color:#3f3745;background:#fffaf2;font-size:10px;font-weight:600;cursor:pointer;touch-action:none;transition:background .12s ease,box-shadow .12s ease,transform .1s ease}
+.practice-key.is-black{height:86px;z-index:2;background:#1a1423;color:#eee;border-color:#000}
+@keyframes key-glow-pulse{0%{filter:brightness(1.3) drop-shadow(0 0 16px var(--gold));transform:translateY(2px) scale(.985)}40%{filter:brightness(1.2) drop-shadow(0 0 10px rgba(229,189,121,.8));transform:translateY(1px)}100%{filter:none;transform:translateY(0) scale(1)}}
+.practice-key.key-hit{animation:key-glow-pulse .38s cubic-bezier(.2,.9,.3,1) forwards}
+.practice-key.active{background:linear-gradient(to bottom,#f7dda6,var(--gold))!important;color:#21192e!important;border-color:#ffe8bb!important;box-shadow:0 -6px 0 #b78a4d inset,0 0 20px #e5bd79cc,0 4px 10px #0006!important;transform:translateY(2px)}
+.practice-key.is-black.active{background:linear-gradient(to bottom,#ffc466,#e5bd79)!important;box-shadow:0 -5px 0 #9c6c28 inset,0 0 22px rgba(240,147,43,.9)!important}
+.practice-keyboard-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.practice-keyboard-footer label{display:flex;align-items:center;gap:8px}
+.practice-keyboard-footer select{padding:6px 10px;font-size:12px;min-height:36px}

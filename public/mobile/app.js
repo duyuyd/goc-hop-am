@@ -90,3 +90,315 @@ if(!native&&'serviceWorker' in navigator&&location.protocol==='https:')navigator
 
 function videoSize(){const size=Math.max(200,Math.min(420,Number($('video-size-mobile').value)||200));if(native)call('videoLayout',{size}).catch(error=>toast(error.message));else{$('video-mount').style.height=size+'px';$('video-mount').style.aspectRatio='auto'}}
 $('video-size-mobile').addEventListener('input',videoSize);$('video-compact-mobile').addEventListener('click',()=>{$('video-size-mobile').value=200;videoSize();$('reader-options').open=false;$('video-options').open=false});
+
+// --- Real-time Visual Piano Roll & Virtual Keyboard for Practice Screen ---
+(()=>{
+  const pKeyboard = $('practice-keyboard');
+  const canvas = $('piano-roll-canvas');
+  if (!pKeyboard || !canvas) return;
+
+  const ctx = canvas.getContext('2d');
+  const noteNames = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+  const chordPatterns = [
+    { name: '', type: 'trưởng', intervals: [0, 4, 7] },
+    { name: 'm', type: 'thứ', intervals: [0, 3, 7] },
+    { name: '7', type: 'bảy', intervals: [0, 4, 7, 10] },
+    { name: 'maj7', type: 'trưởng 7', intervals: [0, 4, 7, 11] },
+    { name: 'm7', type: 'thứ 7', intervals: [0, 3, 7, 10] },
+    { name: 'dim', type: 'giảm', intervals: [0, 3, 6] },
+    { name: 'aug', type: 'tăng', intervals: [0, 4, 8] },
+    { name: 'sus4', type: 'treo 4', intervals: [0, 5, 7] },
+    { name: 'sus2', type: 'treo 2', intervals: [0, 2, 7] }
+  ];
+
+  let pAudioCtx = null;
+  let activeNotes = new Set();
+  let fallingNotes = []; // { midi, y, height, active }
+  let practiceMidiAccess = null;
+
+  function getAudioCtx() {
+    if (!pAudioCtx) {
+      pAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (pAudioCtx.state === 'suspended') pAudioCtx.resume();
+    return pAudioCtx;
+  }
+
+  function playTone(midi, length = 0.7) {
+    try {
+      const actx = getAudioCtx();
+      const freq = 440 * 2 ** ((midi - 69) / 12);
+      const timbre = $('practice-timbre')?.value || 'piano';
+      const now = actx.currentTime;
+
+      if (timbre === 'organ') {
+        [1, 2, 3].forEach((h, idx) => {
+          const osc = actx.createOscillator(), gain = actx.createGain();
+          osc.type = 'sine';
+          osc.frequency.value = freq * h;
+          gain.gain.setValueAtTime([0.08, 0.05, 0.03][idx], now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + length);
+          osc.connect(gain).connect(actx.destination);
+          osc.start(now);
+          osc.stop(now + length + 0.03);
+        });
+      } else if (timbre === 'guitar') {
+        const osc = actx.createOscillator(), filter = actx.createBiquadFilter(), gain = actx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.value = freq;
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(freq * 4, now);
+        filter.frequency.exponentialRampToValueAtTime(freq * 0.8, now + length * 0.8);
+        gain.gain.setValueAtTime(0.14, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + length);
+        osc.connect(filter).connect(gain).connect(actx.destination);
+        osc.start(now);
+        osc.stop(now + length + 0.03);
+      } else {
+        const osc = actx.createOscillator(), gain = actx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0, now);
+        gain.gain.linearRampToValueAtTime(0.12, now + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + Math.max(0.05, length));
+        osc.connect(gain).connect(actx.destination);
+        osc.start(now);
+        osc.stop(now + length + 0.03);
+      }
+    } catch {}
+  }
+
+  function detectChord(notes) {
+    if (notes.size < 2) return null;
+    const pitchClasses = Array.from(notes).map(n => n % 12);
+    const unique = Array.from(new Set(pitchClasses));
+
+    for (let root = 0; root < 12; root++) {
+      for (const pattern of chordPatterns) {
+        const expected = pattern.intervals.map(i => (root + i) % 12);
+        const match = expected.every(p => unique.includes(p));
+        if (match) {
+          return `${noteNames[root]}${pattern.name} (${pattern.type})`;
+        }
+      }
+    }
+    return unique.map(p => noteNames[p]).join(' + ');
+  }
+
+  function updateMonitor() {
+    const list = Array.from(activeNotes).sort((a, b) => a - b);
+    if (!list.length) {
+      if ($('live-note-name')) $('live-note-name').textContent = '—';
+      if ($('live-note-midi')) $('live-note-midi').textContent = '—';
+      if ($('live-chord-name')) $('live-chord-name').textContent = '—';
+      return;
+    }
+
+    const last = list[list.length - 1];
+    const pitch = last % 12;
+    const octave = Math.floor(last / 12) - 1;
+    const noteLabel = `${noteNames[pitch]}${octave}`;
+
+    if ($('live-note-name')) $('live-note-name').textContent = noteLabel;
+    if ($('live-note-midi')) $('live-note-midi').textContent = String(last);
+
+    const detected = detectChord(activeNotes);
+    if ($('live-chord-name')) {
+      $('live-chord-name').textContent = detected || (list.length > 1 ? list.map(n => noteNames[n % 12]).join(' ') : noteLabel);
+    }
+  }
+
+  const keyTimers = new Map();
+
+  function triggerNoteOn(midi) {
+    if (midi < 48 || midi > 84) return;
+    activeNotes.add(midi);
+    playTone(midi, 0.75);
+
+    // Highlight key with glow pulse animation
+    const key = pKeyboard.querySelector(`.practice-key[data-midi="${midi}"]`);
+    if (key) {
+      if (keyTimers.has(midi)) {
+        clearTimeout(keyTimers.get(midi));
+        keyTimers.delete(midi);
+      }
+      key.classList.remove('key-hit');
+      void key.offsetWidth;
+      key.classList.add('active', 'key-hit');
+    }
+
+    // Add falling note in piano roll
+    const existing = fallingNotes.find(n => n.midi === midi && n.active);
+    if (!existing) {
+      fallingNotes.push({ midi, y: 0, height: 4, active: true });
+    }
+
+    updateMonitor();
+  }
+
+  function triggerNoteOff(midi) {
+    activeNotes.delete(midi);
+    const key = pKeyboard.querySelector(`.practice-key[data-midi="${midi}"]`);
+    if (key) {
+      const timer = setTimeout(() => {
+        if (!activeNotes.has(midi)) {
+          key.classList.remove('active');
+          setTimeout(() => key.classList.remove('key-hit'), 200);
+        }
+        keyTimers.delete(midi);
+      }, 250);
+      keyTimers.set(midi, timer);
+    }
+
+    // Stop growing falling note block
+    const active = fallingNotes.find(n => n.midi === midi && n.active);
+    if (active) active.active = false;
+
+    updateMonitor();
+  }
+
+  // Render Virtual Keyboard (C4 = 60 to C6 = 84, 25 keys)
+  pKeyboard.replaceChildren();
+  let whiteCount = 0;
+  for (let midi = 60; midi <= 84; midi++) {
+    const pitch = midi % 12;
+    const isBlack = [1, 3, 6, 8, 10].includes(pitch);
+    const key = document.createElement('button');
+    key.className = 'practice-key ' + (isBlack ? 'is-black' : 'is-white');
+    key.dataset.midi = midi;
+    key.style.left = ((isBlack ? whiteCount - 0.32 : whiteCount) / 15 * 100) + '%';
+    key.style.width = ((isBlack ? 0.64 : 1) / 15 * 100) + '%';
+    key.textContent = noteNames[pitch];
+    key.setAttribute('aria-label', `${noteNames[pitch]}${Math.floor(midi / 12) - 1}`);
+
+    if (!isBlack) whiteCount++;
+
+    key.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      triggerNoteOn(midi);
+    });
+    key.addEventListener('pointerup', e => {
+      e.preventDefault();
+      triggerNoteOff(midi);
+    });
+    key.addEventListener('pointerleave', () => {
+      if (activeNotes.has(midi)) triggerNoteOff(midi);
+    });
+    key.addEventListener('pointercancel', () => {
+      if (activeNotes.has(midi)) triggerNoteOff(midi);
+    });
+
+    pKeyboard.append(key);
+  }
+
+  // Web MIDI API connection
+  function handleMIDIMessage(event) {
+    const [status, note, velocity] = event.data;
+    const command = status >> 4;
+    if (command === 9 && velocity > 0) {
+      triggerNoteOn(note);
+    } else if (command === 8 || (command === 9 && velocity === 0)) {
+      triggerNoteOff(note);
+    }
+  }
+
+  async function connectMIDI() {
+    const statusEl = $('practice-midi-status');
+    if (!navigator.requestMIDIAccess) {
+      if (statusEl) statusEl.textContent = 'Trình duyệt này chưa hỗ trợ Web MIDI API.';
+      return;
+    }
+    try {
+      if (statusEl) statusEl.textContent = 'Đang tìm kiếm thiết bị MIDI…';
+      practiceMidiAccess = await navigator.requestMIDIAccess();
+      const inputs = Array.from(practiceMidiAccess.inputs.values());
+      if (inputs.length) {
+        inputs.forEach(input => {
+          input.onmidimessage = handleMIDIMessage;
+        });
+        const names = inputs.map(i => i.name).join(', ');
+        if (statusEl) statusEl.textContent = `🎹 Đã kết nối đàn MIDI: ${names}`;
+        toast(`Đã nhận đàn MIDI: ${inputs[0].name}`);
+      } else {
+        if (statusEl) statusEl.textContent = '🎹 Đã mở cổng MIDI. Hãy cắm đàn MIDI USB vào thiết bị để gõ nốt.';
+      }
+
+      practiceMidiAccess.onstatechange = () => {
+        const updated = Array.from(practiceMidiAccess.inputs.values());
+        updated.forEach(input => {
+          input.onmidimessage = handleMIDIMessage;
+        });
+        if (statusEl) {
+          statusEl.textContent = updated.length
+            ? `🎹 Đã kết nối đàn MIDI: ${updated.map(i => i.name).join(', ')}`
+            : 'Chưa phát hiện đàn MIDI USB.';
+        }
+      };
+    } catch (err) {
+      if (statusEl) statusEl.textContent = 'Chưa cấp quyền MIDI hoặc không tìm thấy đàn: ' + err.message;
+    }
+  }
+
+  if ($('practice-midi-btn')) {
+    $('practice-midi-btn').addEventListener('click', connectMIDI);
+  }
+
+  if ($('piano-roll-clear')) {
+    $('piano-roll-clear').addEventListener('click', () => {
+      fallingNotes = [];
+    });
+  }
+
+  // Piano Roll Waterfall Rendering loop
+  function drawPianoRoll() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Draw track grid (25 columns from 60 to 84)
+    const colWidth = canvas.width / 25;
+    for (let i = 0; i < 25; i++) {
+      const midi = 60 + i;
+      const isBlack = [1, 3, 6, 8, 10].includes(midi % 12);
+      ctx.fillStyle = isBlack ? '#15101d' : '#1c1626';
+      ctx.fillRect(i * colWidth, 0, colWidth - 1, canvas.height);
+    }
+
+    // Update and draw note blocks
+    const speed = 1.4;
+    for (let i = fallingNotes.length - 1; i >= 0; i--) {
+      const note = fallingNotes[i];
+      if (note.midi < 60 || note.midi > 84) {
+        fallingNotes.splice(i, 1);
+        continue;
+      }
+
+      const colIndex = note.midi - 60;
+      const x = colIndex * colWidth + 1;
+      const w = colWidth - 3;
+
+      if (note.active) {
+        note.height += speed;
+      } else {
+        note.y += speed;
+      }
+
+      const isBlack = [1, 3, 6, 8, 10].includes(note.midi % 12);
+      ctx.fillStyle = isBlack ? '#f0932b' : '#e5bd79';
+      ctx.shadowColor = '#e5bd7988';
+      ctx.shadowBlur = 6;
+
+      ctx.beginPath();
+      ctx.roundRect(x, note.y, w, Math.max(3, note.height), 3);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      // Remove notes that scrolled past canvas
+      if (note.y > canvas.height) {
+        fallingNotes.splice(i, 1);
+      }
+    }
+
+    requestAnimationFrame(drawPianoRoll);
+  }
+
+  drawPianoRoll();
+})();

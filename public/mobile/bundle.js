@@ -302,14 +302,16 @@ function createMusicTools({native=false,call=async()=>true,toast=()=>{},getSong=
  let data={score:{format:'goc-score-1',title:'Giai điệu của tôi',author:'',bpm:80,notes:[]},notes:'',sessions:[]};
  try{const v=JSON.parse(localStorage.getItem('goc-music-workspace-v1')||'null');if(v){data={score:cleanScore(v.score),notes:String(v.notes||'').slice(0,15000),sessions:Array.isArray(v.sessions)?v.sessions.filter(s=>s&&Number.isFinite(s.minutes)&&s.minutes>0&&typeof s.date==='string').slice(-30):[]}}}catch{}
  const dialog=document.createElement('dialog');dialog.id='music-tools';dialog.className='music-tools';dialog.setAttribute('aria-labelledby','music-title');
- dialog.innerHTML=`<div class="music-head"><div><span class="music-kicker">GÓC HỢP ÂM · NPT DUY</span><h2 id="music-title">Góc luyện nhạc</h2></div><button data-music-close aria-label="Đóng công cụ">×</button></div><nav class="music-tabs" aria-label="Công cụ âm nhạc"><button data-music-tab="chords" aria-pressed="true">Hợp âm</button><button data-music-tab="score" aria-pressed="false">Sheet nhạc</button><button data-music-tab="practice" aria-pressed="false">Buổi tập</button></nav><section data-music-panel="chords"><p class="music-muted">12 giọng · 12 loại hợp âm · phát bằng âm tổng hợp trên thiết bị.</p><div class="music-fields"><label>Âm gốc<select id="music-root">${musicNames.map(n=>`<option>${n}</option>`).join('')}</select></label><label>Loại hợp âm<select id="music-quality">${Object.keys(musicQualities).map(q=>`<option value="${q}">${q||'Trưởng'}${q==='m'?' · thứ':''}</option>`).join('')}</select></label></div><div class="music-chord"><strong id="music-chord-name">C</strong><p id="music-tones"></p><div id="music-piano" aria-label="Các nốt của hợp âm"></div><button id="music-play-chord">▶ Nghe hợp âm</button></div><h3>Gam & vòng hòa âm</h3><p id="music-scale"></p><p id="music-progression"></p><button id="music-play-progression">▶ Nghe vòng I – vi – IV – V</button><p class="music-muted">Ký hiệu phím thăng (#); các nốt đồng âm có thể được viết khác trong bản nhạc.</p></section><section data-music-panel="score" hidden><p class="music-muted">Soạn giai điệu một bè, nhịp 4/4. Thêm từng nốt, phát lại, in hoặc lưu bản soạn của bạn.</p><div class="music-fields"><label>Tên bản soạn<input id="music-score-title" maxlength="100"></label><label>Người soạn<input id="music-score-author" maxlength="100" placeholder="Tên của bạn"></label></div><div class="music-fields"><label>Nốt<select id="music-note">${Array.from({length:37},(_,i)=>`<option value="${48+i}">${musicNames[i%12]}${3+Math.floor(i/12)}</option>`).join('')}<option value="rest">Dấu lặng</option></select></label><label>Trường độ<select id="music-duration"><option value="1">Nốt đen · 1 phách</option><option value="0.5">Móc đơn · ½ phách</option><option value="2">Nốt trắng · 2 phách</option><option value="4">Nốt tròn · 4 phách</option></select></label><label>BPM<input id="music-score-bpm" type="number" min="40" max="240" value="80"></label></div><div class="music-keyboard-wrap"><div id="music-keyboard" class="music-keyboard" aria-label="Đàn piano hai quãng tám"></div></div><p id="music-current-note" class="music-muted" aria-live="polite">Chạm phím để chơi · Khi phát sheet, phím sáng theo từng nốt.</p><div class="music-actions"><button id="music-add-note">＋ Thêm nốt</button><button id="music-undo">↶ Bỏ nốt cuối</button><button id="music-play-score">▶ Nghe sheet</button><button id="music-stop">■ Dừng</button></div><div class="music-fields"><label>Nốt cần chỉnh<select id="music-edit-index" aria-label="Chọn nốt cần chỉnh"></select></label><button id="music-edit-note">Sửa bằng nốt &amp; trường độ đã chọn</button></div><p id="music-score-info" role="status"></p><div id="music-score-preview" class="music-score-preview"></div><div class="music-actions"><button id="music-print-score">In / lưu PDF</button><button id="music-blank">Giấy kẻ nhạc</button><button id="music-export">↓ Sao lưu sheet JSON</button><button id="music-import">↑ Mở sheet JSON</button><button id="music-import-midi">↓ Nhập MIDI → dựng sheet</button><button id="music-export-xml">↑ Xuất MusicXML</button><button id="music-print-lyrics">In lời & hợp âm đang mở</button></div><h3>Chưa có sheet? Nhận giai điệu từ âm thanh</h3><p class="music-muted">Chọn tệp hát/đàn một bè dưới 3 MB. Nhận tối đa 60 giây mỗi lần, theo BPM đã chọn; tạo sheet nháp để nghe và chỉnh. Nhạc phối nhiều nhạc cụ có thể nhận sai. Âm thanh xử lý trên máy.</p><label>Bắt đầu từ giây<input id="music-audio-start" type="number" min="0" max="3600" value="0"></label><button id="music-transcribe">↑ Chọn âm thanh &amp; tạo sheet nháp</button><h3>Tìm sheet từ các thư viện lớn</h3><p class="music-muted">Mở thư viện bên ngoài để tìm bản nhạc. Khả năng xem hoặc tải tùy từng bản; bản nhạc chưa được nhập vào Góc Hợp Âm.</p><div class="music-actions"><button data-sheet-source="musescore">MuseScore ↗</button><button data-sheet-source="imslp">IMSLP ↗</button><button data-sheet-source="musopen">Musopen ↗</button></div><p class="music-muted">Sheet là bản soạn riêng của bạn; công cụ không tự biến hợp âm bài hát thành tổng phổ.</p></section><section data-music-panel="practice" hidden><h3>Nhật ký luyện tập</h3><label>Mục tiêu, vòng hợp âm, ghi chú<textarea id="music-practice-notes" rows="6" maxlength="15000" placeholder="Hôm nay tập chuyển Am – F – C – G…"></textarea></label><div class="music-fields"><label>Số phút đã tập<input id="music-minutes" type="number" min="1" max="600" value="15"></label><button id="music-log">Lưu buổi tập</button></div><div id="music-session-list"></div><p class="music-muted">Bản soạn và ghi chú tự lưu trên thiết bị này. Xuất JSON để giữ bản soạn khi đổi máy. Không tự đăng lên mạng.</p></section><p id="music-message" role="status" aria-live="polite"></p><p class="music-byline">Dự án do NPT Duy phát triển.</p>`;
- document.body.append(dialog);const el=id=>dialog.querySelector('#'+id);let audio,timers=[],picking=false;
+  dialog.innerHTML=`<div class="music-head"><div><span class="music-kicker">GÓC HỢP ÂM · NPT DUY</span><h2 id="music-title">Góc luyện nhạc</h2></div><button data-music-close aria-label="Đóng công cụ">×</button></div><nav class="music-tabs" aria-label="Công cụ âm nhạc"><button data-music-tab="chords" aria-pressed="true">Hợp âm</button><button data-music-tab="score" aria-pressed="false">Sheet nhạc</button><button data-music-tab="practice" aria-pressed="false">Buổi tập</button></nav><section data-music-panel="chords"><p class="music-muted">12 giọng · 12 loại hợp âm · phát bằng âm tổng hợp trên thiết bị.</p><div class="music-fields"><label>Âm gốc<select id="music-root">${musicNames.map(n=>`<option>${n}</option>`).join('')}</select></label><label>Loại hợp âm<select id="music-quality">${Object.keys(musicQualities).map(q=>`<option value="${q}">${q||'Trưởng'}${q==='m'?' · thứ':''}</option>`).join('')}</select></label></div><div class="music-chord"><strong id="music-chord-name">C</strong><p id="music-tones"></p><div id="music-piano" aria-label="Các nốt của hợp âm"></div><button id="music-play-chord">▶ Nghe hợp âm</button></div><h3>Gam & vòng hòa âm</h3><p id="music-scale"></p><p id="music-progression"></p><button id="music-play-progression">▶ Nghe vòng I – vi – IV – V</button><p class="music-muted">Ký hiệu phím thăng (#); các nốt đồng âm có thể được viết khác trong bản nhạc.</p></section><section data-music-panel="score" hidden><p class="music-muted">Soạn giai điệu một bè, nhịp 4/4. Thêm từng nốt, phát lại, in hoặc lưu bản soạn của bạn.</p><div class="music-fields"><label>Tên bản soạn<input id="music-score-title" maxlength="100"></label><label>Người soạn<input id="music-score-author" maxlength="100" placeholder="Tên của bạn"></label></div><div class="music-fields"><label>Nốt<select id="music-note">${Array.from({length:37},(_,i)=>`<option value="${48+i}">${musicNames[i%12]}${3+Math.floor(i/12)}</option>`).join('')}<option value="rest">Dấu lặng</option></select></label><label>Trường độ<select id="music-duration"><option value="1">Nốt đen · 1 phách</option><option value="0.5">Móc đơn · ½ phách</option><option value="2">Nốt trắng · 2 phách</option><option value="4">Nốt tròn · 4 phách</option></select></label><label>BPM<input id="music-score-bpm" type="number" min="40" max="240" value="80"></label></div><div class="music-fields"><label>Âm sắc<select id="music-timbre"><option value="piano">Piano (Dương cầm)</option><option value="organ">Organ (Điện tử)</option><option value="guitar">Guitar (Mộc)</option></select></label><label>Đàn MIDI USB<button id="music-midi-btn" type="button" class="wide">🎹 Kết nối đàn MIDI</button></label></div><div class="music-keyboard-wrap"><div id="music-keyboard" class="music-keyboard" aria-label="Đàn piano hai quãng tám"></div></div><p id="music-current-note" class="music-muted" aria-live="polite">Chạm phím để chơi · Khi phát sheet, phím sáng theo từng nốt.</p><p id="music-midi-status" class="music-muted" style="color:var(--m-gold)">Chưa kết nối đàn MIDI USB. Bấm 'Kết nối đàn MIDI' hoặc cắm đàn để chơi trực tiếp.</p><div class="music-actions"><button id="music-add-note">＋ Thêm nốt</button><button id="music-undo">↶ Bỏ nốt cuối</button><button id="music-play-score">▶ Nghe sheet</button><button id="music-stop">■ Dừng</button></div><div class="music-fields"><label>Nốt cần chỉnh<select id="music-edit-index" aria-label="Chọn nốt cần chỉnh"></select></label><button id="music-edit-note">Sửa bằng nốt &amp; trường độ đã chọn</button></div><p id="music-score-info" role="status"></p><div id="music-score-preview" class="music-score-preview"></div><div class="music-actions"><button id="music-print-score">In / lưu PDF</button><button id="music-blank">Giấy kẻ nhạc</button><button id="music-export">↓ Sao lưu sheet JSON</button><button id="music-import">↑ Mở sheet JSON</button><button id="music-import-midi">↓ Nhập MIDI → dựng sheet</button><button id="music-export-xml">↑ Xuất MusicXML</button><button id="music-print-lyrics">In lời & hợp âm đang mở</button></div><h3>Chưa có sheet? Nhận giai điệu từ âm thanh</h3><p class="music-muted">Chọn tệp hát/đàn một bè dưới 3 MB. Nhận tối đa 60 giây mỗi lần, theo BPM đã chọn; tạo sheet nháp để nghe và chỉnh. Nhạc phối nhiều nhạc cụ có thể nhận sai. Âm thanh xử lý trên máy.</p><label>Bắt đầu từ giây<input id="music-audio-start" type="number" min="0" max="3600" value="0"></label><button id="music-transcribe">↑ Chọn âm thanh &amp; tạo sheet nháp</button><h3>Tìm sheet từ các thư viện lớn</h3><p class="music-muted">Mở thư viện bên ngoài để tìm bản nhạc. Khả năng xem hoặc tải tùy từng bản; bản nhạc chưa được nhập vào Góc Hợp Âm.</p><div class="music-actions"><button data-sheet-source="musescore">MuseScore ↗</button><button data-sheet-source="imslp">IMSLP ↗</button><button data-sheet-source="musopen">Musopen ↗</button></div><p class="music-muted">Sheet là bản soạn riêng của bạn; công cụ không tự biến hợp âm bài hát thành tổng phổ.</p></section><section data-music-panel="practice" hidden><h3>Nhật ký luyện tập</h3><label>Mục tiêu, vòng hợp âm, ghi chú<textarea id="music-practice-notes" rows="6" maxlength="15000" placeholder="Hôm nay tập chuyển Am – F – C – G…"></textarea></label><div class="music-fields"><label>Số phút đã tập<input id="music-minutes" type="number" min="1" max="600" value="15"></label><button id="music-log">Lưu buổi tập</button></div><div id="music-session-list"></div><p class="music-muted">Bản soạn và ghi chú tự lưu trên thiết bị này. Xuất JSON để giữ bản soạn khi đổi máy. Không tự đăng lên mạng.</p></section><p id="music-message" role="status" aria-live="polite"></p><p class="music-byline">Dự án do NPT Duy phát triển.</p>`;
+ document.body.append(dialog);const el=id=>dialog.querySelector('#'+id);let audio,timers=[],picking=false,timbre='piano',midiAccess=null;
  function message(text){el('music-message').textContent=text;toast(text)}
  function save(){try{localStorage.setItem('goc-music-workspace-v1',JSON.stringify(data))}catch{message('Chưa lưu được trên thiết bị. Hãy xuất JSON để giữ bản soạn.')}}
  function stop(){for(const timer of timers)clearTimeout(timer);timers=[];if(audio){audio.close().catch(()=>{});audio=null}dialog.querySelectorAll('.music-key.active').forEach(k=>k.classList.remove('active'))}
  async function context(){stop();audio=new (window.AudioContext||window.webkitAudioContext)();await audio.resume();return audio}
- function sound(ctx,midi,start,length=.7){if(midi===null)return;const osc=ctx.createOscillator(),gain=ctx.createGain();osc.type='triangle';osc.frequency.value=440*2**((midi-69)/12);gain.gain.setValueAtTime(0,start);gain.gain.linearRampToValueAtTime(.12,start+.02);gain.gain.exponentialRampToValueAtTime(.001,start+Math.max(.05,length));osc.connect(gain).connect(ctx.destination);osc.start(start);osc.stop(start+length+.03)}
+ function sound(ctx,midi,start,length=.7){if(midi===null)return;const freq=440*2**((midi-69)/12);if(timbre==='organ'){[1,2,3].forEach((h,idx)=>{const osc=ctx.createOscillator(),gain=ctx.createGain();osc.type='sine';osc.frequency.value=freq*h;gain.gain.setValueAtTime([.08,.05,.03][idx],start);gain.gain.exponentialRampToValueAtTime(.001,start+length);osc.connect(gain).connect(ctx.destination);osc.start(start);osc.stop(start+length+.03)})}else if(timbre==='guitar'){const osc=ctx.createOscillator(),filter=ctx.createBiquadFilter(),gain=ctx.createGain();osc.type='sawtooth';osc.frequency.value=freq;filter.type='lowpass';filter.frequency.setValueAtTime(freq*4,start);filter.frequency.exponentialRampToValueAtTime(freq*.8,start+length*.8);gain.gain.setValueAtTime(.14,start);gain.gain.exponentialRampToValueAtTime(.001,start+length);osc.connect(filter).connect(gain).connect(ctx.destination);osc.start(start);osc.stop(start+length+.03)}else{const osc=ctx.createOscillator(),gain=ctx.createGain();osc.type='triangle';osc.frequency.value=freq;gain.gain.setValueAtTime(0,start);gain.gain.linearRampToValueAtTime(.12,start+.02);gain.gain.exponentialRampToValueAtTime(.001,start+Math.max(.05,length));osc.connect(gain).connect(ctx.destination);osc.start(start);osc.stop(start+length+.03)}}
  function lightNote(midi){for(const key of dialog.querySelectorAll('.music-key'))key.classList.toggle('active',Number(key.dataset.midi)===midi);el('music-current-note').textContent=midi===null?'Dấu lặng':musicNames[midi%12]+(Math.floor(midi/12)-1)}
+ function handleMidiMessage(event){const [status,note,velocity]=event.data,cmd=status>>4;if(cmd===9&&velocity>0){if(note>=48&&note<=84){lightNote(note);el('music-note').value=String(note);context().then(ctx=>sound(ctx,note,ctx.currentTime,.65)).catch(()=>{})}}else if(cmd===8||(cmd===9&&velocity===0)){if(note>=48&&note<=84){const key=dialog.querySelector(`.music-key[data-midi="${note}"]`);if(key)key.classList.remove('active')}}}
+ async function initMIDI(){if(!navigator.requestMIDIAccess){message('Trình duyệt chưa hỗ trợ Web MIDI API.');return}try{midiAccess=await navigator.requestMIDIAccess();const inputs=Array.from(midiAccess.inputs.values());if(inputs.length){inputs.forEach(input=>input.onmidimessage=handleMidiMessage);message('Đã kết nối đàn MIDI: '+inputs[0].name)}else{message('Đã bật MIDI. Cắm đàn qua USB để chơi.')}midiAccess.onstatechange=()=>{const updated=Array.from(midiAccess.inputs.values());updated.forEach(input=>input.onmidimessage=handleMidiMessage);if(updated.length)message('Đã nhận thiết bị: '+updated[0].name)}}catch{message('Chưa cấp quyền MIDI hoặc không tìm thấy đàn.')}}
  let white=0;for(let midi=60;midi<=84;midi++){const pitch=midi%12,black=[1,3,6,8,10].includes(pitch),key=document.createElement('button');key.className='music-key '+(black?'is-black':'is-white');key.dataset.midi=midi;key.style.left=((black?white-.32:white)/15*100)+'%';key.style.width=((black?.64:1)/15*100)+'%';key.textContent=musicNames[pitch];key.setAttribute('aria-label',musicNames[pitch]+(Math.floor(midi/12)-1));if(!black)white++;key.onpointerdown=async event=>{event.preventDefault();try{if(!audio)await context();await audio.resume();sound(audio,midi,audio.currentTime,.65);lightNote(midi);el('music-note').value=String(midi)}catch{message('Chưa phát được tiếng đàn.')}};el('music-keyboard').append(key)}
  const sheetSources={musescore:'https://musescore.com/sheetmusic',imslp:'https://imslp.org/',musopen:'https://musopen.org/sheetmusic/'};
  for(const button of dialog.querySelectorAll('[data-sheet-source]'))button.onclick=()=>{const url=sheetSources[button.dataset.sheetSource];if(native)call('sheetSource',{source:button.dataset.sheetSource}).catch(error=>message(error.message));else window.open(url,'_blank','noopener')};
@@ -360,7 +362,7 @@ function createMusicTools({native=false,call=async()=>true,toast=()=>{},getSong=
  };
  el('music-import').onclick=async()=>{picking=true;try{const text=await readMusicText({native,call});if(!text)return;const parsed=JSON.parse(text);if(parsed?.format!=='goc-score-1'||!Array.isArray(parsed.notes))throw new Error('Cần tệp sheet Góc Hợp Âm đã xuất.');const draft=cleanScore(parsed);localStorage.setItem('goc-score-previous',JSON.stringify(data.score));data.score=draft;save();score();message('Đã mở sheet của bạn.')}catch(e){message('Chưa mở được sheet: '+e.message)}finally{picking=false}};
  el('music-practice-notes').value=data.notes;el('music-practice-notes').oninput=()=>{data.notes=el('music-practice-notes').value;save()};el('music-log').onclick=()=>{const minutes=Math.round(Number(el('music-minutes').value));if(!Number.isFinite(minutes)||minutes<1||minutes>600){message('Nhập thời gian tập từ 1 đến 600 phút.');return}data.sessions.push({date:new Date().toISOString(),minutes});data.sessions=data.sessions.slice(-30);save();sessions();message('Đã lưu buổi tập trên thiết bị.')};
- document.addEventListener('visibilitychange',()=>{if(document.hidden&&!picking)stop()});el('music-quality').value='';el('music-note').value='60';chord();score();sessions();
+ document.addEventListener('visibilitychange',()=>{if(document.hidden&&!picking)stop()});el('music-quality').value='';el('music-note').value='60';chord();score();sessions();if(el('music-midi-btn'))el('music-midi-btn').onclick=initMIDI;if(el('music-timbre'))el('music-timbre').onchange=()=>{timbre=el('music-timbre').value};
  return {open(){dialog.showModal()},printLyrics,stop,get permissionPending(){return picking}};
 }
 
@@ -455,5 +457,317 @@ if(!native&&'serviceWorker' in navigator&&location.protocol==='https:')navigator
 
 function videoSize(){const size=Math.max(200,Math.min(420,Number($('video-size-mobile').value)||200));if(native)call('videoLayout',{size}).catch(error=>toast(error.message));else{$('video-mount').style.height=size+'px';$('video-mount').style.aspectRatio='auto'}}
 $('video-size-mobile').addEventListener('input',videoSize);$('video-compact-mobile').addEventListener('click',()=>{$('video-size-mobile').value=200;videoSize();$('reader-options').open=false;$('video-options').open=false});
+
+// --- Real-time Visual Piano Roll & Virtual Keyboard for Practice Screen ---
+(()=>{
+  const pKeyboard = $('practice-keyboard');
+  const canvas = $('piano-roll-canvas');
+  if (!pKeyboard || !canvas) return;
+
+  const ctx = canvas.getContext('2d');
+  const noteNames = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+  const chordPatterns = [
+    { name: '', type: 'trưởng', intervals: [0, 4, 7] },
+    { name: 'm', type: 'thứ', intervals: [0, 3, 7] },
+    { name: '7', type: 'bảy', intervals: [0, 4, 7, 10] },
+    { name: 'maj7', type: 'trưởng 7', intervals: [0, 4, 7, 11] },
+    { name: 'm7', type: 'thứ 7', intervals: [0, 3, 7, 10] },
+    { name: 'dim', type: 'giảm', intervals: [0, 3, 6] },
+    { name: 'aug', type: 'tăng', intervals: [0, 4, 8] },
+    { name: 'sus4', type: 'treo 4', intervals: [0, 5, 7] },
+    { name: 'sus2', type: 'treo 2', intervals: [0, 2, 7] }
+  ];
+
+  let pAudioCtx = null;
+  let activeNotes = new Set();
+  let fallingNotes = []; // { midi, y, height, active }
+  let practiceMidiAccess = null;
+
+  function getAudioCtx() {
+    if (!pAudioCtx) {
+      pAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (pAudioCtx.state === 'suspended') pAudioCtx.resume();
+    return pAudioCtx;
+  }
+
+  function playTone(midi, length = 0.7) {
+    try {
+      const actx = getAudioCtx();
+      const freq = 440 * 2 ** ((midi - 69) / 12);
+      const timbre = $('practice-timbre')?.value || 'piano';
+      const now = actx.currentTime;
+
+      if (timbre === 'organ') {
+        [1, 2, 3].forEach((h, idx) => {
+          const osc = actx.createOscillator(), gain = actx.createGain();
+          osc.type = 'sine';
+          osc.frequency.value = freq * h;
+          gain.gain.setValueAtTime([0.08, 0.05, 0.03][idx], now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + length);
+          osc.connect(gain).connect(actx.destination);
+          osc.start(now);
+          osc.stop(now + length + 0.03);
+        });
+      } else if (timbre === 'guitar') {
+        const osc = actx.createOscillator(), filter = actx.createBiquadFilter(), gain = actx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.value = freq;
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(freq * 4, now);
+        filter.frequency.exponentialRampToValueAtTime(freq * 0.8, now + length * 0.8);
+        gain.gain.setValueAtTime(0.14, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + length);
+        osc.connect(filter).connect(gain).connect(actx.destination);
+        osc.start(now);
+        osc.stop(now + length + 0.03);
+      } else {
+        const osc = actx.createOscillator(), gain = actx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0, now);
+        gain.gain.linearRampToValueAtTime(0.12, now + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + Math.max(0.05, length));
+        osc.connect(gain).connect(actx.destination);
+        osc.start(now);
+        osc.stop(now + length + 0.03);
+      }
+    } catch {}
+  }
+
+  function detectChord(notes) {
+    if (notes.size < 2) return null;
+    const pitchClasses = Array.from(notes).map(n => n % 12);
+    const unique = Array.from(new Set(pitchClasses));
+
+    for (let root = 0; root < 12; root++) {
+      for (const pattern of chordPatterns) {
+        const expected = pattern.intervals.map(i => (root + i) % 12);
+        const match = expected.every(p => unique.includes(p));
+        if (match) {
+          return `${noteNames[root]}${pattern.name} (${pattern.type})`;
+        }
+      }
+    }
+    return unique.map(p => noteNames[p]).join(' + ');
+  }
+
+  function updateMonitor() {
+    const list = Array.from(activeNotes).sort((a, b) => a - b);
+    if (!list.length) {
+      if ($('live-note-name')) $('live-note-name').textContent = '—';
+      if ($('live-note-midi')) $('live-note-midi').textContent = '—';
+      if ($('live-chord-name')) $('live-chord-name').textContent = '—';
+      return;
+    }
+
+    const last = list[list.length - 1];
+    const pitch = last % 12;
+    const octave = Math.floor(last / 12) - 1;
+    const noteLabel = `${noteNames[pitch]}${octave}`;
+
+    if ($('live-note-name')) $('live-note-name').textContent = noteLabel;
+    if ($('live-note-midi')) $('live-note-midi').textContent = String(last);
+
+    const detected = detectChord(activeNotes);
+    if ($('live-chord-name')) {
+      $('live-chord-name').textContent = detected || (list.length > 1 ? list.map(n => noteNames[n % 12]).join(' ') : noteLabel);
+    }
+  }
+
+  const keyTimers = new Map();
+
+  function triggerNoteOn(midi) {
+    if (midi < 48 || midi > 84) return;
+    activeNotes.add(midi);
+    playTone(midi, 0.75);
+
+    // Highlight key with glow pulse animation
+    const key = pKeyboard.querySelector(`.practice-key[data-midi="${midi}"]`);
+    if (key) {
+      if (keyTimers.has(midi)) {
+        clearTimeout(keyTimers.get(midi));
+        keyTimers.delete(midi);
+      }
+      key.classList.remove('key-hit');
+      void key.offsetWidth;
+      key.classList.add('active', 'key-hit');
+    }
+
+    // Add falling note in piano roll
+    const existing = fallingNotes.find(n => n.midi === midi && n.active);
+    if (!existing) {
+      fallingNotes.push({ midi, y: 0, height: 4, active: true });
+    }
+
+    updateMonitor();
+  }
+
+  function triggerNoteOff(midi) {
+    activeNotes.delete(midi);
+    const key = pKeyboard.querySelector(`.practice-key[data-midi="${midi}"]`);
+    if (key) {
+      const timer = setTimeout(() => {
+        if (!activeNotes.has(midi)) {
+          key.classList.remove('active');
+          setTimeout(() => key.classList.remove('key-hit'), 200);
+        }
+        keyTimers.delete(midi);
+      }, 250);
+      keyTimers.set(midi, timer);
+    }
+
+    // Stop growing falling note block
+    const active = fallingNotes.find(n => n.midi === midi && n.active);
+    if (active) active.active = false;
+
+    updateMonitor();
+  }
+
+  // Render Virtual Keyboard (C4 = 60 to C6 = 84, 25 keys)
+  pKeyboard.replaceChildren();
+  let whiteCount = 0;
+  for (let midi = 60; midi <= 84; midi++) {
+    const pitch = midi % 12;
+    const isBlack = [1, 3, 6, 8, 10].includes(pitch);
+    const key = document.createElement('button');
+    key.className = 'practice-key ' + (isBlack ? 'is-black' : 'is-white');
+    key.dataset.midi = midi;
+    key.style.left = ((isBlack ? whiteCount - 0.32 : whiteCount) / 15 * 100) + '%';
+    key.style.width = ((isBlack ? 0.64 : 1) / 15 * 100) + '%';
+    key.textContent = noteNames[pitch];
+    key.setAttribute('aria-label', `${noteNames[pitch]}${Math.floor(midi / 12) - 1}`);
+
+    if (!isBlack) whiteCount++;
+
+    key.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      triggerNoteOn(midi);
+    });
+    key.addEventListener('pointerup', e => {
+      e.preventDefault();
+      triggerNoteOff(midi);
+    });
+    key.addEventListener('pointerleave', () => {
+      if (activeNotes.has(midi)) triggerNoteOff(midi);
+    });
+    key.addEventListener('pointercancel', () => {
+      if (activeNotes.has(midi)) triggerNoteOff(midi);
+    });
+
+    pKeyboard.append(key);
+  }
+
+  // Web MIDI API connection
+  function handleMIDIMessage(event) {
+    const [status, note, velocity] = event.data;
+    const command = status >> 4;
+    if (command === 9 && velocity > 0) {
+      triggerNoteOn(note);
+    } else if (command === 8 || (command === 9 && velocity === 0)) {
+      triggerNoteOff(note);
+    }
+  }
+
+  async function connectMIDI() {
+    const statusEl = $('practice-midi-status');
+    if (!navigator.requestMIDIAccess) {
+      if (statusEl) statusEl.textContent = 'Trình duyệt này chưa hỗ trợ Web MIDI API.';
+      return;
+    }
+    try {
+      if (statusEl) statusEl.textContent = 'Đang tìm kiếm thiết bị MIDI…';
+      practiceMidiAccess = await navigator.requestMIDIAccess();
+      const inputs = Array.from(practiceMidiAccess.inputs.values());
+      if (inputs.length) {
+        inputs.forEach(input => {
+          input.onmidimessage = handleMIDIMessage;
+        });
+        const names = inputs.map(i => i.name).join(', ');
+        if (statusEl) statusEl.textContent = `🎹 Đã kết nối đàn MIDI: ${names}`;
+        toast(`Đã nhận đàn MIDI: ${inputs[0].name}`);
+      } else {
+        if (statusEl) statusEl.textContent = '🎹 Đã mở cổng MIDI. Hãy cắm đàn MIDI USB vào thiết bị để gõ nốt.';
+      }
+
+      practiceMidiAccess.onstatechange = () => {
+        const updated = Array.from(practiceMidiAccess.inputs.values());
+        updated.forEach(input => {
+          input.onmidimessage = handleMIDIMessage;
+        });
+        if (statusEl) {
+          statusEl.textContent = updated.length
+            ? `🎹 Đã kết nối đàn MIDI: ${updated.map(i => i.name).join(', ')}`
+            : 'Chưa phát hiện đàn MIDI USB.';
+        }
+      };
+    } catch (err) {
+      if (statusEl) statusEl.textContent = 'Chưa cấp quyền MIDI hoặc không tìm thấy đàn: ' + err.message;
+    }
+  }
+
+  if ($('practice-midi-btn')) {
+    $('practice-midi-btn').addEventListener('click', connectMIDI);
+  }
+
+  if ($('piano-roll-clear')) {
+    $('piano-roll-clear').addEventListener('click', () => {
+      fallingNotes = [];
+    });
+  }
+
+  // Piano Roll Waterfall Rendering loop
+  function drawPianoRoll() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Draw track grid (25 columns from 60 to 84)
+    const colWidth = canvas.width / 25;
+    for (let i = 0; i < 25; i++) {
+      const midi = 60 + i;
+      const isBlack = [1, 3, 6, 8, 10].includes(midi % 12);
+      ctx.fillStyle = isBlack ? '#15101d' : '#1c1626';
+      ctx.fillRect(i * colWidth, 0, colWidth - 1, canvas.height);
+    }
+
+    // Update and draw note blocks
+    const speed = 1.4;
+    for (let i = fallingNotes.length - 1; i >= 0; i--) {
+      const note = fallingNotes[i];
+      if (note.midi < 60 || note.midi > 84) {
+        fallingNotes.splice(i, 1);
+        continue;
+      }
+
+      const colIndex = note.midi - 60;
+      const x = colIndex * colWidth + 1;
+      const w = colWidth - 3;
+
+      if (note.active) {
+        note.height += speed;
+      } else {
+        note.y += speed;
+      }
+
+      const isBlack = [1, 3, 6, 8, 10].includes(note.midi % 12);
+      ctx.fillStyle = isBlack ? '#f0932b' : '#e5bd79';
+      ctx.shadowColor = '#e5bd7988';
+      ctx.shadowBlur = 6;
+
+      ctx.beginPath();
+      ctx.roundRect(x, note.y, w, Math.max(3, note.height), 3);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      // Remove notes that scrolled past canvas
+      if (note.y > canvas.height) {
+        fallingNotes.splice(i, 1);
+      }
+    }
+
+    requestAnimationFrame(drawPianoRoll);
+  }
+
+  drawPianoRoll();
+})();
 
 })();
