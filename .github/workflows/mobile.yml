@@ -22,7 +22,7 @@ jobs:
         run: |
           node mobile/scripts/prepare-web.mjs
           node --check public/mobile/bundle.js
-          node --test tests/mobile.test.mjs tests/video-captions.test.mjs tests/music-tools.test.mjs
+          npm test
       - name: Build iOS Simulator
         run: |
           xcodebuild -project mobile/ios/GocHopAm.xcodeproj -scheme GocHopAm -configuration Debug -destination 'generic/platform=iOS Simulator' -derivedDataPath mobile/build/ios-simulator CODE_SIGNING_ALLOWED=NO build
