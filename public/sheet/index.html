@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>Thư viện sheet PDF · Góc Hợp Âm</title>
+<style>
+:root{color-scheme:dark;font:16px/1.55 system-ui,sans-serif;background:#171123;color:#f5f1fb}
+*{box-sizing:border-box}body{margin:0}header{padding:28px 18px;background:linear-gradient(120deg,#21142f,#37243e);border-bottom:1px solid #5c4464}
+main,header>div{max-width:1000px;margin:auto}main{padding:20px 14px 65px}h1{margin:0;color:#e7c07c}h2{margin:.3rem 0}small,.muted{color:#c6bbcd}
+a{color:#e7c07c}input,select,button{font:inherit}input,select{width:100%;padding:12px;background:#271c35;border:1px solid #655370;border-radius:9px;color:#fff}
+.filters{display:grid;grid-template-columns:2fr 1fr;gap:12px;margin:20px 0}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.score{padding:16px;background:#251b31;border:1px solid #51415d;border-radius:12px;text-align:left;color:inherit;min-height:104px;cursor:pointer}
+.score:hover,.score:focus-visible{border-color:#e7c07c}strong{display:block;color:#fff}
+#viewer{margin-top:20px;padding:14px;background:#21172c;border:1px solid #6b5274;border-radius:12px}
+#viewer[hidden]{display:none}iframe{width:100%;height:min(72vh,720px);border:0;background:#fff}
+.actions{display:flex;flex-wrap:wrap;gap:14px;margin:12px 0}button.close{float:right;padding:8px 13px}
+@media(max-width:500px){.filters{grid-template-columns:1fr}iframe{height:62vh}}
+</style></head>
+<body><header><div><small>GÓC HỢP ÂM · THƯ VIỆN BẢN PHỔ</small><h1>Sheet nhạc PDF</h1><p>Tra cứu bản phổ có nguồn, xem trên điện thoại và mở tệp PDF gốc.</p></div></header>
+<main><a href="/mobile/">← Góc Hợp Âm</a>
+<p class="muted">Đây là thư viện nguồn mẫu, chưa phải kho sheet Việt đầy đủ. Không thay thế trình đọc và dữ liệu hiện tại.</p>
+<div class="filters"><label>Tìm bản nhạc hoặc tác giả<input id="q" type="search" autocomplete="off" placeholder="Tìm không dấu cũng được"></label>
+<label>Sắp xếp<select id="sort"><option value="az">A–Z</option><option value="za">Z–A</option></select></label></div>
+<p id="count" aria-live="polite"></p><div id="results" class="grid"></div>
+<section id="viewer" hidden><button class="close" id="close" type="button" aria-label="Đóng bản phổ">Đóng ×</button>
+<h2 id="sheet-title"></h2><p class="muted" id="sheet-source"></p>
+<div class="actions"><a id="pdf-link" target="_blank" rel="noopener noreferrer">Mở / tải PDF gốc</a><a href="https://www.mutopiaproject.org/" target="_blank" rel="noopener noreferrer">Nguồn Mutopia</a></div>
+<iframe id="pdf-view" title="Xem khuông nhạc PDF" loading="lazy" referrerpolicy="no-referrer"></iframe>
+<p class="muted">Nếu trình duyệt chặn nhúng PDF, chọn “Mở / tải PDF gốc”.</p></section></main>
+<script type="module">
+import {searchPdf,trustedPdf} from "./registry.mjs";
+const $=id=>document.getElementById(id),view=$("viewer"),frame=$("pdf-view"),results=$("results");
+function openScore(s){
+ if(!trustedPdf(s.url))return;
+ $("sheet-title").textContent=s.title+" — "+s.composer;
+ $("sheet-source").textContent=s.instrument+" · "+s.source+" · "+s.license;
+ $("pdf-link").href=s.url;view.hidden=false;frame.src=s.url;view.scrollIntoView({block:"start",behavior:"smooth"});
+}
+function render(){
+ const rows=searchPdf({q:$("q").value,sort:$("sort").value});
+ $("count").textContent=rows.length+" bản phổ PDF có nguồn";
+ results.replaceChildren();
+ for(const s of rows){const b=document.createElement("button");b.type="button";b.className="score";
+ const name=document.createElement("strong");name.textContent=s.title;
+ const desc=document.createElement("small");desc.textContent=s.composer+" · "+s.instrument;
+ b.append(name,desc);b.addEventListener("click",()=>openScore(s));results.append(b)}
+ if(!rows.length){const p=document.createElement("p");p.textContent="Chưa có sheet phù hợp trong nguồn mẫu.";results.append(p)}
+}
+$("q").addEventListener("input",render);$("sort").addEventListener("change",render);
+$("close").addEventListener("click",()=>{view.hidden=true;frame.src="about:blank"});render();
+</script></body></html>
