@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {songUrl,validSong,offlineLibrary,catalogItems,transpose,bpmValue,libraryBytes,videoId,videoList,videoEmbed} from '../public/mobile/logic.js';
+import {songUrl,validSong,offlineLibrary,catalogItems,transpose,bpmValue,libraryBytes,videoId,videoList,videoEmbed,savedCatalogMatches} from '../public/mobile/logic.js';
 const url='https://hopamviet.vn/chord/song/nang-tho/W8IU6E0B.html';
 const song={title:'Nàng thơ',author:'Hoàng Dũng',content:'[C]Bài tập [G/B]',key:'C',sourceUrl:url};
 test('offline imports reject foreign hosts, credentials, private URLs and malformed songs',()=>{
@@ -71,4 +71,14 @@ test('native music search uses current Sites and has in-app browse fallback',asy
  const android=await readFile(new URL('../mobile/android/app/src/main/java/vn/gochopam/app/MainActivity.java',import.meta.url),'utf8');
  const ios=await readFile(new URL('../mobile/ios/MusicViewController.swift',import.meta.url),'utf8');
  for(const source of [android,ios]){assert.ok(source.includes('https://goc-hop-am.onwardcrust.chatgpt.site'));assert.ok(source.includes('siteOpen'));assert.ok(!source.includes('gochopam.pages.dev'))}
+});
+
+test('offline search falls back to genuine saved songs, accent-insensitive, without fabricating results',()=>{
+ const a={...song,title:'Mơ hồ',author:'NPT Duy',savedAt:200};
+ const b={...song,title:'Bài hát khác',sourceUrl:'https://hopamviet.vn/chord/song/bai-hat/ABC1.html',savedAt:100};
+ const library={a,b,invalid:{title:'Fake',content:'X',sourceUrl:'https://example.com'}};
+ assert.deepEqual(savedCatalogMatches(library,'mo ho').map(s=>s.title),['Mơ hồ']);
+ assert.deepEqual(savedCatalogMatches(library,'npt duy').map(s=>s.title),['Mơ hồ']);
+ assert.deepEqual(savedCatalogMatches(library,'khong ton tai'),[]);
+ assert.deepEqual(savedCatalogMatches(library,'').map(s=>s.title),['Mơ hồ','Bài hát khác']);
 });
