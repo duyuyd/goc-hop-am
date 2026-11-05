@@ -102,7 +102,7 @@ class AutoSheetTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "No pitched notes"):
             ai.verify_xml(invalid)
         with self.assertRaises(ai.ET.ParseError):
-            invalid.write_text("<xml><broken>", encoding="utf8")
+            invalid.write_text("<xml><broken>" + ("x" * 200), encoding="utf8")
             ai.verify_xml(invalid)
 
     def test_changed_audio_not_processed_against_stale_identity(self):
