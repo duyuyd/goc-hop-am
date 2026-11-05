@@ -186,7 +186,8 @@ final class MusicViewController: UIViewController, WKScriptMessageHandler, WKNav
                 present(picker, animated: true); return
             case "saveText":
                 guard let text = args["text"] as? String, let bytes = text.data(using: .utf8), bytes.count <= 250_000 else { reply(id, false, "Tệp quá lớn."); return }
-                let file = FileManager.default.temporaryDirectory.appendingPathComponent("Goc_Hop_Am_Sheet.json")
+                let fileName = (args["name"] as? String) == "Goc_Hop_Am_Sheet.musicxml" ? "Goc_Hop_Am_Sheet.musicxml" : "Goc_Hop_Am_Sheet.json"
+                let file = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
                 try bytes.write(to: file, options: .atomic)
                 let export = UIActivityViewController(activityItems: [file], applicationActivities: nil)
                 export.popoverPresentationController?.sourceView = web
