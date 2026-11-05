@@ -66,11 +66,20 @@ jobs:
       - name: Build unsigned Android App Bundle
         run: |
           node mobile/scripts/prepare-web.mjs
-          gradle -p mobile/android :app:bundleRelease --no-daemon
+          gradle -p mobile/android :app:assembleDebug :app:bundleRelease --no-daemon
       - uses: actions/upload-artifact@v4
         with:
           name: android-unsigned-aab
           path: mobile/android/app/build/outputs/bundle/release/*.aab
+          retention-days: 14
+      - name: Verify standalone QA APK archive
+        run: |
+          test -s mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          unzip -t mobile/android/app/build/outputs/apk/debug/app-debug.apk > /dev/null
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-qa-debug-apk
+          path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 14
       - name: Attach Android bundle to public release
         if: github.event_name == 'release'
@@ -91,7 +100,7 @@ jobs:
           node-version: '22'
       - uses: actions/download-artifact@v4
         with:
-          pattern: '*'
+          pattern: '*unsigned*'
           path: mobile/build/release
           merge-multiple: true
       - name: Verify the exact installable APK and publish preview
