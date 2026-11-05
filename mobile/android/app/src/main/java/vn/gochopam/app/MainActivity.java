@@ -44,9 +44,10 @@ import java.util.concurrent.TimeUnit;
 public final class MainActivity extends Activity {
   private static final String LOCAL = "https://app.gochopam.local/";
   private static final String API = "https://goc-hop-am.onwardcrust.chatgpt.site";
-  private static final String API_FALLBACK = "https://gochopam.pages.dev";
   private WebView web;
   private WebView printWeb;
+  private android.app.Dialog siteDialog;
+  private WebView siteWeb;
   private String textRequest=null;
   private byte[] textOutput;
   private boolean printing=false;
@@ -152,25 +153,45 @@ public final class MainActivity extends Activity {
   }
   private JSONObject api(String path)throws Exception{
     if(path.length()>2000||!path.matches("/api/(catalog|reader|video-captions)\\?[^\\r\\n#]*"))throw new Exception("Yêu cầu không hợp lệ.");
-    Exception lastError=null;
-    for(String endpoint:new String[]{API,API_FALLBACK}){
-      HttpURLConnection c=null;
-      try{
-        c=(HttpURLConnection)new URL(endpoint+path).openConnection();
-        c.setConnectTimeout(10000);c.setReadTimeout(20000);c.setInstanceFollowRedirects(false);
-        c.setRequestProperty("Accept","application/json");c.setRequestProperty("User-Agent","GocHopAmAndroid/1.3.1");
-        int status=c.getResponseCode();
-        if(status!=200)throw new Exception(status==429?"Kho bài đang giới hạn truy cập. Hãy thử lại sau.":"Chưa tải được bài. Hãy kiểm tra kết nối rồi thử lại.");
-        String contentType=c.getContentType();
-        if(contentType==null||!contentType.contains("application/json"))throw new Exception("Kho bài chưa trả dữ liệu hợp lệ.");
-        JSONObject data=new JSONObject(new String(read(c.getInputStream(),2000000),StandardCharsets.UTF_8));
-        if(path.startsWith("/api/catalog?")&&data.optJSONArray("items")==null)throw new Exception("Dữ liệu danh sách bài chưa tương thích.");
-        if(path.startsWith("/api/reader?")&&data.optJSONObject("song")==null)throw new Exception("Dữ liệu bài hát chưa tương thích.");
-        return data;
-      }catch(Exception error){lastError=error;}
-      finally{if(c!=null)c.disconnect();}
-    }
-    throw lastError==null?new Exception("Kho bài chưa phản hồi."):lastError;
+    HttpURLConnection c=null;
+    try{
+      c=(HttpURLConnection)new URL(API+path).openConnection();
+      c.setConnectTimeout(8000);c.setReadTimeout(15000);c.setInstanceFollowRedirects(false);
+      c.setRequestProperty("Accept","application/json");
+      c.setRequestProperty("User-Agent","GocHopAmAndroid/1.3.1");
+      int code=c.getResponseCode();
+      if(code!=200)throw new Exception("Sites trả HTTP "+code+" cho kho bài.");
+      String type=c.getContentType();
+      if(type==null||!type.toLowerCase(java.util.Locale.ROOT).contains("json"))throw new Exception("Sites chưa trả JSON của kho bài.");
+      return new JSONObject(new String(read(c.getInputStream(),2000000),StandardCharsets.UTF_8));
+    }finally{if(c!=null)c.disconnect();}
+  }
+  private void showSite(String query){
+    if(siteDialog!=null)siteDialog.dismiss();
+    android.app.Dialog dialog=new android.app.Dialog(this);
+    LinearLayout panel=new LinearLayout(this);panel.setOrientation(LinearLayout.VERTICAL);
+    panel.setBackgroundColor(Color.rgb(33,25,46));
+    Button close=new Button(this);close.setText("← Đóng kho bài Sites");
+    panel.addView(close,new LinearLayout.LayoutParams(-1,dp(52)));
+    WebView browser=new WebView(this);browser.setBackgroundColor(Color.WHITE);
+    WebSettings settings=browser.getSettings();settings.setJavaScriptEnabled(true);settings.setDomStorageEnabled(true);
+    settings.setAllowFileAccess(false);settings.setAllowContentAccess(false);
+    settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+    browser.setWebViewClient(new WebViewClient(){
+      @Override public boolean shouldOverrideUrlLoading(WebView view,WebResourceRequest request){
+        Uri url=request.getUrl();
+        if("https".equals(url.getScheme())&&"goc-hop-am.onwardcrust.chatgpt.site".equals(url.getHost()))return false;
+        if("https".equals(url.getScheme()))startActivity(new Intent(Intent.ACTION_VIEW,url));
+        return true;
+      }
+    });
+    panel.addView(browser,new LinearLayout.LayoutParams(-1,0,1));
+    dialog.setContentView(panel);siteWeb=browser;siteDialog=dialog;
+    close.setOnClickListener(v->dialog.dismiss());
+    dialog.setOnDismissListener(d->{browser.stopLoading();browser.destroy();if(siteWeb==browser)siteWeb=null;if(siteDialog==dialog)siteDialog=null;});
+    dialog.show();if(dialog.getWindow()!=null)dialog.getWindow().setLayout(-1,-1);
+    String safe=query==null?"":query.substring(0,Math.min(120,query.length()));
+    browser.loadUrl(API+"/?q="+Uri.encode(safe));
   }
   private synchronized String loadLibrary()throws Exception{
     AtomicFile file=new AtomicFile(new File(getFilesDir(),"offline-v1.json"));
@@ -221,7 +242,8 @@ public final class MainActivity extends Activity {
             case "videoExternal":String videoId=args.optString("id","");if(!videoId.matches("[A-Za-z0-9_-]{11}"))throw new Exception("Video không hợp lệ.");closeVideo(true);startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("https://www.youtube.com/watch?v="+videoId)));break;
             case "awake":if(args.optBoolean("enabled"))getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);break;
             case "metronome":if(args.optBoolean("running")){int bpm=Math.max(40,Math.min(240,args.optInt("bpm",80))),beats=args.optInt("beats",4);if(beats!=2&&beats!=3&&beats!=4&&beats!=6)beats=4;startMetro(bpm,beats);}else stopMetro();break;
-            case "share":String text=args.optString("text","");String sharedUrl=args.optString("url","");if(!sharedUrl.isEmpty()){Uri link=Uri.parse(sharedUrl);if(!"https".equals(link.getScheme())||!"gochopam.pages.dev".equals(link.getHost())||!"/".equals(link.getPath()))throw new Exception("Liên kết không hợp lệ.");text+="\n"+sharedUrl;}if(text.length()>2000)throw new Exception("Nội dung quá dài.");Intent send=new Intent(Intent.ACTION_SEND);send.setType("text/plain");send.putExtra(Intent.EXTRA_TEXT,text);startActivity(Intent.createChooser(send,"Chia sẻ bài hát"));break;
+            case "share":String text=args.optString("text","");String sharedUrl=args.optString("url","");if(!sharedUrl.isEmpty()){Uri link=Uri.parse(sharedUrl);if(!"https".equals(link.getScheme())||!"goc-hop-am.onwardcrust.chatgpt.site".equals(link.getHost())||!"/".equals(link.getPath()))throw new Exception("Liên kết không hợp lệ.");text+="\n"+sharedUrl;}if(text.length()>2000)throw new Exception("Nội dung quá dài.");Intent send=new Intent(Intent.ACTION_SEND);send.setType("text/plain");send.putExtra(Intent.EXTRA_TEXT,text);startActivity(Intent.createChooser(send,"Chia sẻ bài hát"));break;
+            case "siteOpen":showSite(args.optString("q",""));break;
             case "github":startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("https://github.com/duyuyd/goc-hop-am")));break;
             case "help":startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(API+"/huong-dan")));break;
             default:throw new Exception("Thao tác không được hỗ trợ.");
@@ -232,5 +254,5 @@ public final class MainActivity extends Activity {
   }
   @Override public void onPause(){super.onPause();studio.onPause();if(studio.pending()||singing.pending()||textRequest!=null||printing){return;}stopSpeech();closeVideo(true);stopMetro();getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);web.evaluateJavascript("window.dispatchEvent(new Event('nativePause'))",null);web.onPause();}
   @Override public void onResume(){super.onResume();printing=false;if(web!=null)web.onResume();}
-  @Override public void onDestroy(){studio.onPause();destroyed=true;stopSpeech();closeVideo(false);stopMetro();clock.shutdownNow();network.shutdownNow();if(tone!=null){tone.release();tone=null;}if(printWeb!=null)printWeb.destroy();web.removeJavascriptInterface("GocAndroid");web.destroy();super.onDestroy();}
+  @Override public void onDestroy(){if(siteDialog!=null)siteDialog.dismiss();studio.onPause();destroyed=true;stopSpeech();closeVideo(false);stopMetro();clock.shutdownNow();network.shutdownNow();if(tone!=null){tone.release();tone=null;}if(printWeb!=null)printWeb.destroy();web.removeJavascriptInterface("GocAndroid");web.destroy();super.onDestroy();}
 }
