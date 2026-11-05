@@ -50,5 +50,14 @@ export function readerSong(data){
  const ref=songUrl(item.sourceUrl||item.url)||(item.id!==undefined&&/^[A-Za-z0-9._~-]{1,180}$/.test(String(item.id))?'site:'+item.id:null);
  return {...item,sourceUrl:ref,content:item.content||item.lyrics||''};
 }
+// Search only verified local saved records when the remote catalog is unavailable.
+// Keep these entries distinct from network search results and never invent new songs.
+export function savedCatalogMatches(library, query, limit=50) {
+ const fold=value=>String(value??'').normalize('NFKD').replace(/[đĐ]/g,'d').replace(/\p{M}/gu,'').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+ const needle=fold(query),max=Math.max(1,Math.min(100,Math.trunc(Number(limit)||50)));
+ const records=Object.values(offlineLibrary(library));
+ return records.filter(song=>!needle||fold([song.title,song.author].join(' ')).includes(needle))
+  .sort((a,b)=>(b.savedAt||0)-(a.savedAt||0)).slice(0,max);
+}
 export function libraryBytes(library){return new TextEncoder().encode(JSON.stringify(library)).length}
 export function bpmValue(value){return Math.max(40,Math.min(240,Math.round(Number(value)||80)))}
