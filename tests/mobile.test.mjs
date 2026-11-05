@@ -56,3 +56,19 @@ test('real lyric cues track time and reject invented or invalid positions',async
  assert.equal(matchLyric(lines,'chưa',0),null);
  assert.equal(matchLyric(lines,'nội dung hoàn toàn không khớp',0),null);
 });
+
+test('Sites catalog identifies songs without relying on old source link shape',()=>{
+ const site='https://goc-hop-am.onwardcrust.chatgpt.site';
+ assert.equal(songUrl(site+'/bai-hat/mo-ho'),site+'/bai-hat/mo-ho');
+ assert.equal(songUrl(site+'/admin'),null);
+ assert.equal(songUrl('https://phishing.example/bai-hat/mo-ho'),null);
+ const list=catalogItems({data:{items:[{id:'mo-ho',title:'Mơ hồ',artist:'Ca sĩ A'},{url:site+'/bai-hat/khac',name:'Bài khác'}]}});
+ assert.equal(list.length,2);assert.equal(list[0].url,'site:mo-ho');assert.equal(list[0].author,'Ca sĩ A');
+ assert.equal(list[1].url,site+'/bai-hat/khac');
+ assert.equal(catalogItems({results:[{id:123,title:'Bài mới'}]})[0].url,'site:123');
+});
+test('native music search uses current Sites and has in-app browse fallback',async()=>{
+ const android=await readFile(new URL('../mobile/android/app/src/main/java/vn/gochopam/app/MainActivity.java',import.meta.url),'utf8');
+ const ios=await readFile(new URL('../mobile/ios/MusicViewController.swift',import.meta.url),'utf8');
+ for(const source of [android,ios]){assert.ok(source.includes('https://goc-hop-am.onwardcrust.chatgpt.site'));assert.ok(source.includes('siteOpen'));assert.ok(!source.includes('gochopam.pages.dev'))}
+});
