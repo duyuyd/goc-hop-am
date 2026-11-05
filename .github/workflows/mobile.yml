@@ -2,8 +2,6 @@ name: Build Android and iOS
 on:
   push:
     branches: [main]
-  release:
-    types: [published]
   workflow_dispatch:
 permissions:
   contents: read
@@ -94,37 +92,25 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
       - uses: actions/download-artifact@v4
         with:
-          pattern: '*unsigned*'
-          path: mobile/build/release
-          merge-multiple: true
-      - name: Verify the exact installable APK and publish preview
+          name: android-qa-debug-apk
+          path: qa-release
+      - name: Verify exact QA APK and publish to GitHub Releases
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          node - <<'JS'
-          const fs=require('fs');const r=JSON.parse(fs.readFileSync('mobile/distribution/latest.json','utf8'));
-          if(!/^\d+\.\d+\.\d+$/.test(r.version)||!/^\/downloads\/[A-Za-z0-9_.-]+\.apk$/.test(r.download)||!/^[a-f0-9]{64}$/.test(r.sha256))throw Error('Invalid release manifest');
-          fs.writeFileSync('mobile/build/release/SHA256SUMS.txt',r.sha256+'  '+r.download.split('/').pop()+'\n');
-          fs.appendFileSync(process.env.GITHUB_ENV,'RELEASE_TAG=v'+r.version+'\nAPK_NAME='+r.download.split('/').pop()+'\nAPK_URL=https://gochopam.pages.dev'+r.download+'\n');
-          JS
-      - name: Download and verify installable APK
-        run: |
-          curl --fail --location --retry 2 --max-time 90 "$APK_URL" -o "mobile/build/release/$APK_NAME"
-          cd mobile/build/release
-          sha256sum --check SHA256SUMS.txt
-      - name: Publish Android and iOS files with author information
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            echo "Version already released; leaving its assets unchanged."
+          set -eu
+          test -s qa-release/app-debug.apk
+          unzip -t qa-release/app-debug.apk > /dev/null
+          mv qa-release/app-debug.apk qa-release/Goc_Hop_Am_Android_1.3.1_QA.apk
+          (cd qa-release && sha256sum Goc_Hop_Am_Android_1.3.1_QA.apk > SHA256SUMS.txt)
+          tag=v1.3.1-qa
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "QA version already published. Keep the exact existing signing identity and release assets unchanged."
             exit 0
           fi
-          gh release create "$RELEASE_TAG" --target "$GITHUB_SHA" --prerelease --title "Góc Hợp Âm 1.3.0 · NPT Duy" --notes-file mobile/distribution/NOTES.md
-          gh release upload "$RELEASE_TAG" mobile/build/release/* --clobber
+          gh release create "$tag" qa-release/Goc_Hop_Am_Android_1.3.1_QA.apk qa-release/SHA256SUMS.txt \
+            --target "$GITHUB_SHA" --prerelease \
+            --title "Góc Hợp Âm Android 1.3.1 QA · Tìm kiếm Sites" \
+            --notes "Bản thử nghiệm Android cài song song với 1.3.0, không ghi đè dữ liệu cũ. Ưu tiên Sites goc-hop-am.onwardcrust.chatgpt.site, loại bỏ API máy chủ cũ, thêm duyệt kho bài Sites trong ứng dụng khi API không sẵn sàng. Bản debug QA chưa được kiểm thử trên điện thoại thực tế; không dùng để cập nhật bản 1.3.0 hiện có."
