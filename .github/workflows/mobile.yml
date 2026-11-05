@@ -61,6 +61,8 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
+      - name: Validate free AI sheet queue (no model download)
+        run: python3 -m unittest discover -s tests -p test_ai_sheet.py -v
       - name: Build unsigned Android App Bundle
         run: |
           node mobile/scripts/prepare-web.mjs
