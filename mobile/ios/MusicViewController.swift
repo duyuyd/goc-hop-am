@@ -1,6 +1,7 @@
 import UIKit
 import WebKit
 import AVFoundation
+import SafariServices
 
 private final class NoRedirects: NSObject, URLSessionTaskDelegate {
     func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) { completionHandler(nil) }
@@ -57,7 +58,7 @@ final class MusicViewController: UIViewController, WKScriptMessageHandler, WKNav
     private var timer: DispatchSourceTimer?
     private var players: [AVAudioPlayer] = []
     private var beat = 0
-    private let apiOrigin = "https://gochopam.pages.dev"
+    private let apiOrigin = "https://goc-hop-am.onwardcrust.chatgpt.site"
     private let redirectGuard = NoRedirects()
     private lazy var session: URLSession = {
         let config = URLSessionConfiguration.ephemeral
@@ -209,12 +210,18 @@ final class MusicViewController: UIViewController, WKScriptMessageHandler, WKNav
                 guard let videoID = args["id"] as? String, videoID.range(of: "^[A-Za-z0-9_-]{11}$", options: .regularExpression) != nil else { reply(id, false, "Video không hợp lệ."); return }
                 closeVideo(notify: true)
                 UIApplication.shared.open(URL(string: "https://www.youtube.com/watch?v=" + videoID)!)
+            case "siteOpen":
+                var components = URLComponents(string: apiOrigin + "/")!
+                components.queryItems = [URLQueryItem(name: "q", value: String((args["q"] as? String ?? "").prefix(120)))]
+                guard let url = components.url else { reply(id, false, "Liên kết Sites không hợp lệ."); return }
+                let safari = SFSafariViewController(url: url)
+                present(safari, animated: true)
             case "api":
                 guard let path = args["path"] as? String, path.count < 2000, path.range(of: "^/api/(catalog|reader|video-captions)\\?[^\\r\\n#]*$", options: .regularExpression) != nil, let url = URL(string: apiOrigin + path) else { reply(id, false, "Yêu cầu không hợp lệ."); return }
                 var request = URLRequest(url: url); request.setValue("application/json", forHTTPHeaderField: "Accept"); request.setValue("GocHopAmIOS/1.2", forHTTPHeaderField: "User-Agent")
                 session.dataTask(with: request) { [weak self] data, response, error in
                     guard let self = self else { return }
-                    guard error == nil, let response = response as? HTTPURLResponse, response.statusCode == 200, response.mimeType == "application/json", let data = data, data.count <= 2_000_000, let json = try? JSONSerialization.jsonObject(with: data), json is [String: Any] else { self.reply(id, false, "Chưa tải được bài. Hãy kiểm tra mạng rồi thử lại."); return }
+                    guard error == nil, let response = response as? HTTPURLResponse, response.statusCode == 200, response.mimeType?.contains("json") == true, let data = data, data.count <= 2_000_000, let json = try? JSONSerialization.jsonObject(with: data), json is [String: Any] else { self.reply(id, false, "Chưa tải được bài. Hãy kiểm tra mạng rồi thử lại."); return }
                     self.reply(id, true, json)
                 }.resume()
                 return
@@ -237,7 +244,7 @@ final class MusicViewController: UIViewController, WKScriptMessageHandler, WKNav
             case "share":
                 guard let text = args["text"] as? String, text.count <= 800 else { reply(id, false, "Nội dung quá dài."); return }
                 let sharedURL = (args["url"] as? String).flatMap { URL(string: $0) }
-                let items: [Any] = sharedURL?.scheme == "https" && sharedURL?.host == "gochopam.pages.dev" ? [text, sharedURL!] : [text]
+                let items: [Any] = sharedURL?.scheme == "https" && sharedURL?.host == "goc-hop-am.onwardcrust.chatgpt.site" ? [text, sharedURL!] : [text]
                 let share = UIActivityViewController(activityItems: items, applicationActivities: nil)
                 share.popoverPresentationController?.sourceView = web
                 share.popoverPresentationController?.sourceRect = CGRect(x: web.bounds.midX, y: 20, width: 1, height: 1)
