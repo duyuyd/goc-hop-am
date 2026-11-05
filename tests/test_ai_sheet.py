@@ -101,7 +101,7 @@ class AutoSheetTests(unittest.TestCase):
         invalid.write_text(XML.replace("<pitch>", "<other>").replace("</pitch>", "</other>"), encoding="utf8")
         with self.assertRaisesRegex(ValueError, "No pitched notes"):
             ai.verify_xml(invalid)
-        with self.assertRaisesRegex(Exception, "ParseError"):
+        with self.assertRaises(ai.ET.ParseError):
             invalid.write_text("<xml><broken>", encoding="utf8")
             ai.verify_xml(invalid)
 
