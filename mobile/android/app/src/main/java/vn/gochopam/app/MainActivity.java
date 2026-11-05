@@ -43,7 +43,8 @@ import java.util.concurrent.TimeUnit;
 /** Bundled UI; only public, read-only music endpoints may cross the bridge. */
 public final class MainActivity extends Activity {
   private static final String LOCAL = "https://app.gochopam.local/";
-  private static final String API = "https://gochopam.pages.dev";
+  private static final String API = "https://goc-hop-am.onwardcrust.chatgpt.site";
+  private static final String API_FALLBACK = "https://gochopam.pages.dev";
   private WebView web;
   private WebView printWeb;
   private String textRequest=null;
@@ -151,15 +152,25 @@ public final class MainActivity extends Activity {
   }
   private JSONObject api(String path)throws Exception{
     if(path.length()>2000||!path.matches("/api/(catalog|reader|video-captions)\\?[^\\r\\n#]*"))throw new Exception("Yêu cầu không hợp lệ.");
-    HttpURLConnection c=(HttpURLConnection)new URL(API+path).openConnection();
-    c.setConnectTimeout(10000);c.setReadTimeout(20000);c.setInstanceFollowRedirects(false);
-    c.setRequestProperty("Accept","application/json");c.setRequestProperty("User-Agent","GocHopAmAndroid/1.2");
-    try{
-      int status=c.getResponseCode();
-      if(status!=200)throw new Exception(status==429?"Kho bài đang giới hạn truy cập. Hãy thử lại sau.":"Chưa tải được bài. Hãy kiểm tra kết nối rồi thử lại.");
-      String contentType=c.getContentType();if(contentType==null||!contentType.contains("application/json"))throw new Exception("Kho bài chưa trả dữ liệu hợp lệ.");
-      return new JSONObject(new String(read(c.getInputStream(),2000000),StandardCharsets.UTF_8));
-    }finally{c.disconnect();}
+    Exception lastError=null;
+    for(String endpoint:new String[]{API,API_FALLBACK}){
+      HttpURLConnection c=null;
+      try{
+        c=(HttpURLConnection)new URL(endpoint+path).openConnection();
+        c.setConnectTimeout(10000);c.setReadTimeout(20000);c.setInstanceFollowRedirects(false);
+        c.setRequestProperty("Accept","application/json");c.setRequestProperty("User-Agent","GocHopAmAndroid/1.3.1");
+        int status=c.getResponseCode();
+        if(status!=200)throw new Exception(status==429?"Kho bài đang giới hạn truy cập. Hãy thử lại sau.":"Chưa tải được bài. Hãy kiểm tra kết nối rồi thử lại.");
+        String contentType=c.getContentType();
+        if(contentType==null||!contentType.contains("application/json"))throw new Exception("Kho bài chưa trả dữ liệu hợp lệ.");
+        JSONObject data=new JSONObject(new String(read(c.getInputStream(),2000000),StandardCharsets.UTF_8));
+        if(path.startsWith("/api/catalog?")&&data.optJSONArray("items")==null)throw new Exception("Dữ liệu danh sách bài chưa tương thích.");
+        if(path.startsWith("/api/reader?")&&data.optJSONObject("song")==null)throw new Exception("Dữ liệu bài hát chưa tương thích.");
+        return data;
+      }catch(Exception error){lastError=error;}
+      finally{if(c!=null)c.disconnect();}
+    }
+    throw lastError==null?new Exception("Kho bài chưa phản hồi."):lastError;
   }
   private synchronized String loadLibrary()throws Exception{
     AtomicFile file=new AtomicFile(new File(getFilesDir(),"offline-v1.json"));
