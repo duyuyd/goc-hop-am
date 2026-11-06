@@ -9,6 +9,7 @@ function transpose(chord,shift=0){
 }
 function songUrl(value){
  const text=String(value||'').trim();if(/^site:[A-Za-z0-9._~-]{1,180}$/.test(text))return text;
+ if(/^local:(?:practice-[0-9]{2}|custom-[A-Za-z0-9_-]{1,90})$/.test(text))return text;
  try{
   const u=new URL(text);if(u.protocol!=='https:'||u.username||u.password||u.port||text.length>2048)return null;
   if(u.origin==='https://hopamviet.vn'&&/^\/chord\/song\/[a-z0-9-]+\/[A-Za-z0-9]+\.html$/.test(u.pathname))return u.origin+u.pathname;
@@ -33,7 +34,7 @@ function videoList(song={}){
 function videoEmbed(value,origin){const id=videoId(value);if(!id)return null;const u=new URL('https://www.youtube-nocookie.com/embed/'+id);u.search=new URLSearchParams({playsinline:'1',controls:'1',rel:'0',autoplay:'0',fs:'0',origin:new URL(origin).origin}).toString();return u.href;}
 function offlineLibrary(value){
  const result=Object.create(null);if(!value||typeof value!=='object'||Array.isArray(value))return result;
- for(const item of Object.values(value).slice(0,100))if(validSong(item)){const url=songUrl(item.sourceUrl);result[url]={title:item.title,author:String(item.author||'').slice(0,400),key:/^[A-G][#b]?m?$/.test(item.key)?item.key:'C',content:item.content,sourceUrl:url,videos:videoList(item),savedAt:Number(item.savedAt)||0};}
+ for(const item of Object.values(value).slice(0,1000))if(validSong(item)){const url=songUrl(item.sourceUrl);result[url]={title:item.title,author:String(item.author||'').slice(0,400),key:/^[A-G][#b]?m?$/.test(item.key)?item.key:'C',content:item.content,sourceUrl:url,videos:videoList(item),savedAt:Number(item.savedAt)||0};}
  return result;
 }
 function catalogItems(data){
@@ -55,6 +56,66 @@ function readerSong(data){
 }
 function libraryBytes(library){return new TextEncoder().encode(JSON.stringify(library)).length}
 function bpmValue(value){return Math.max(40,Math.min(240,Math.round(Number(value)||80)))}
+
+// Bundled original chord exercises + offline search. No live website or server required.
+// These are practice exercises, NOT verified transcriptions of existing songs.
+const EXERCISES = [
+  ['C · Am · F · G', 'C', ['C','Am','F','G']],
+  ['G · D · Em · C', 'G', ['G','D','Em','C']],
+  ['Am · F · C · G', 'Am', ['Am','F','C','G']],
+  ['D · A · Bm · G', 'D', ['D','A','Bm','G']],
+  ['F · C · Dm · Bb', 'F', ['F','C','Dm','Bb']],
+  ['Em · C · G · D', 'Em', ['Em','C','G','D']],
+  ['C · G · Am · Em', 'C', ['C','G','Am','Em']],
+  ['A · E · F#m · D', 'A', ['A','E','F#m','D']],
+  ['Dm · G · C · Am', 'Dm', ['Dm','G','C','Am']],
+  ['G · Em · Am · D', 'G', ['G','Em','Am','D']],
+  ['Bb · F · Gm · Eb', 'Bb', ['Bb','F','Gm','Eb']],
+  ['E · B · C#m · A', 'E', ['E','B','C#m','A']]
+];
+const STARTER_EXERCISES = Object.freeze(EXERCISES.map(([progression,key,chords],i)=>Object.freeze({
+  title: 'Bài tập hợp âm '+String(i+1).padStart(2,'0')+' · '+progression,
+  author: 'Góc Hợp Âm · Bài tập nguyên bản',
+  key,
+  genre: 'practice',
+  sourceUrl:'local:practice-'+String(i+1).padStart(2,'0'),
+  content: chords.map((chord,j)=>'['+chord+']Phách '+(j+1)+' — giữ nhịp, đổi hợp âm, nghe và tập.').join('\n'),
+  sheets: {melody:{status:'missing'},piano:{status:'missing'},organ:{status:'missing'}},
+  origin:'original_practice'
+})));
+
+function offlineSearchKey(value) {
+  return String(value??'').normalize('NFKD').replace(/[đĐ]/g,'d')
+    .replace(/\p{M}/gu,'').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim().replace(/\s+/g,' ');
+}
+function offlineFind(saved, url, exercises=STARTER_EXERCISES) {
+  if(saved && Object.prototype.hasOwnProperty.call(saved,url)) return saved[url];
+  return exercises.find(s=>s.sourceUrl===url)||null;
+}
+function offlineSearch(saved, {query='',type='title',genre='',page=0,limit=20}={}, exercises=STARTER_EXERCISES) {
+  const safePage=Math.max(0,Math.min(1000,Number.isInteger(Number(page))?Number(page):0));
+  const safeLimit=Math.max(1,Math.min(100,Math.trunc(Number(limit)||20)));
+  const all=new Map();
+  for(const song of Object.values(saved||{})) {
+    if(song?.sourceUrl && song?.title) all.set(song.sourceUrl,song);
+  }
+  for(const song of exercises) if(song?.sourceUrl && !all.has(song.sourceUrl)) all.set(song.sourceUrl,song);
+  const q=offlineSearchKey(query);
+  const items=[...all.values()].filter(s=>{
+    if(genre && genre!=='practice' && String(s.genre||'')!==String(genre))return false;
+    if(genre==='practice' && s.genre!=='practice')return false;
+    if(!q)return true;
+    const title=offlineSearchKey(s.title);
+    const author=offlineSearchKey(s.author||s.composer||s.artist||'');
+    return type==='composer'||type==='singer' ? author.includes(q):title.includes(q)||author.includes(q);
+  }).sort((a,b)=>{
+    const ax=a.sourceUrl.startsWith('local:custom-')?0:a.sourceUrl.startsWith('local:')?1:2;
+    const bx=b.sourceUrl.startsWith('local:custom-')?0:b.sourceUrl.startsWith('local:')?1:2;
+    return ax-bx||String(a.title).localeCompare(String(b.title),'vi');
+  });
+  const start=safePage*safeLimit;
+  return {items:items.slice(start,start+safeLimit),total:items.length,hasMore:start+safeLimit<items.length,page:safePage};
+}
 
 function lyricWords(text){return String(text||'').replace(/\[[^\]\n]*\]/g,' ').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/đ/g,'d').replace(/Đ/g,'D').toLowerCase().replace(/[^a-z0-9\s]/g,' ').trim().split(/\s+/).filter(Boolean)}
 function matchLyric(lines,spoken,from=0){
@@ -885,16 +946,49 @@ async function playVideo(value){const id=videoId(value);if(!id){$('video-status'
  else{const frame=document.createElement('iframe');frame.title='YouTube · '+(current?.title||'Góc Hợp Âm');frame.src='player.html?id='+encodeURIComponent(id);frame.allow='autoplay; encrypted-media; picture-in-picture';frame.referrerPolicy='strict-origin-when-cross-origin';$('video-mount').replaceChildren(frame);$('video-mount').hidden=false;$('video-status').textContent='YouTube · cần mạng';}
  $('video-close').hidden=false;$('video-external').hidden=false;follow.videoReady();
  }catch(error){if(token===videoRequest)$('video-status').textContent='Chưa mở được video. '+error.message;}}
-async function listen(){if(!current)return;const token=opening,videoToken=++videoRequest;$('video-tools').hidden=false;let videos=videoList(current);if(!videos.length){$('video-status').textContent='Đang tìm bản thu của bài…';try{const data=await call('api',{path:'/api/reader?'+new URLSearchParams({url:current.sourceUrl})});if(token!==opening||videoToken!==videoRequest||!current)return;current={...current,videos:videoList(data.song||{})};videos=videoList(current);}catch{if(token!==opening||videoToken!==videoRequest)return;}}
+async function listen(){if(!current)return;const token=opening,videoToken=++videoRequest;$('video-tools').hidden=false;let videos=videoList(current);if(!videos.length&&!String(current.sourceUrl||'').startsWith('local:')){$('video-status').textContent='Đang tìm bản thu của bài…';try{const data=await call('api',{path:'/api/reader?'+new URLSearchParams({url:current.sourceUrl})});if(token!==opening||videoToken!==videoRequest||!current)return;current={...current,videos:videoList(data.song||{})};videos=videoList(current);}catch{if(token!==opening||videoToken!==videoRequest)return;}}
  if(token!==opening||videoToken!==videoRequest||!current)return;videoChoices();if(videos.length)playVideo(videos[0].id);else $('video-status').textContent='Chưa có bản thu gợi ý. Bạn có thể dán liên kết YouTube bên dưới.';}
 function toast(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toast.timer);toast.timer=setTimeout(()=>$('toast').hidden=true,3500)}
 function cards(container,items,saved=false){container.replaceChildren();items.forEach((s,index)=>{const button=document.createElement('button');button.className='song';const number=document.createElement('span');number.className='number';number.textContent=saved?'♡':String(index+1+page*20).padStart(2,'0');const meta=document.createElement('span');meta.className='meta';const title=document.createElement('strong');title.textContent=s.title;const author=document.createElement('small');author.textContent=s.author||s.singer||'Lời & hợp âm';meta.append(title,author);const arrow=document.createElement('span');arrow.className='arrow';arrow.textContent='›';button.append(number,meta,arrow);button.addEventListener('click',()=>openSong(s.sourceUrl||s.url));container.append(button)})}
-function refreshSaved(){const items=Object.values(offline).sort((a,b)=>b.savedAt-a.savedAt);cards($('saved-songs'),items,true);$('saved-empty').hidden=items.length>0;$('storage-info').textContent=`${items.length}/100 bài · ${(libraryBytes(offline)/1024).toFixed(0)} KB trên thiết bị này.`}
-async function loadCatalog(){const id=++request;$('songs').replaceChildren();$('status').textContent='Đang tìm giai điệu…';$('previous').hidden=true;$('more').hidden=true;const q=$('query').value.trim(),params=new URLSearchParams({mode,page:String(page),type:$('type').value});if(q)params.set('q',q);else if($('genre').value)params.set('genre',$('genre').value);$('list-title').textContent=q?'Kết quả tìm kiếm':mode==='latest'?'Mới cập nhật':'Khám phá hôm nay';try{const data=await call('api',{path:'/api/catalog?'+params});if(id!==request)return;const items=catalogItems(data);cards($('songs'),items);hasMore=!!(data.hasMore??data.data?.hasMore);$('status').textContent=items.length?(data.stale?'Đang hiển thị bản lưu gần nhất.':''):'Chưa tìm thấy bài. Hãy thử tên ngắn hơn hoặc đổi cách tìm.';$('previous').hidden=page===0;$('more').hidden=!hasMore}catch(error){if(id!==request)return;$('songs').replaceChildren();$('status').textContent='Không truy xuất được dữ liệu từ Sites: '+error.message+'. Bấm Mở kho bài Góc Hợp Âm để tìm trực tiếp.';if(searchRequested)openSiteSearch(q).catch(e=>toast(e.message))}}
+function refreshSaved(){const items=Object.values(offline).sort((a,b)=>b.savedAt-a.savedAt);cards($('saved-songs'),items,true);$('saved-empty').hidden=items.length>0;$('storage-info').textContent=`${items.length}/1000 bài · ${(libraryBytes(offline)/1024).toFixed(0)} KB trên thiết bị này.`}
+async function loadCatalog(){
+ const token=++request;
+ const q=$('query').value.trim(),type=$('type').value,genre=$('genre').value;
+ const params=new URLSearchParams({mode,page:String(page),type});
+ if(q)params.set('q',q);else if(genre)params.set('genre',genre);
+ $('list-title').textContent=q?'Kết quả tìm kiếm':mode==='latest'?'Mới cập nhật':'Khám phá hôm nay';
+ // Local library is available immediately even if the Sites API never responds.
+ const local=offlineSearch(offline,{query:q,type,genre,page,limit:20});
+ cards($('songs'),local.items);
+ $('previous').hidden=page===0;
+ hasMore=local.hasMore;$('more').hidden=!hasMore;
+ $('status').textContent=local.items.length
+  ? 'Trên máy có '+local.total+' bài đã lưu/bài tập. Đang kiểm tra kho trực tuyến…'
+  : 'Trên máy chưa có kết quả. Bạn có thể tự thêm bài không cần mạng.';
+ try {
+  const data=await call('api',{path:'/api/catalog?'+params});
+  if(token!==request)return;
+  const online=catalogItems(data);
+  const unique=new Map(local.items.map(x=>[x.sourceUrl,x]));
+  for(const song of online) if(!unique.has(song.sourceUrl))unique.set(song.sourceUrl,song);
+  cards($('songs'),[...unique.values()]);
+  hasMore=Boolean(data.hasMore??data.data?.hasMore)||local.hasMore;
+  $('more').hidden=!hasMore;
+  $('status').textContent=online.length
+    ? 'Kho online: '+online.length+' bài/trang; trên máy: '+local.total+'. Bài chưa lưu cần mạng.'
+    : (local.total?'Đang dùng thư viện trên máy.':'Không tìm thấy bài; hãy tự thêm bài hoặc thử từ khóa khác.');
+ }catch(error){
+  if(token!==request)return;
+  $('status').textContent=local.items.length
+   ? 'Không có kết nối Sites: vẫn có '+local.total+' bài/bài tập mở được trên máy.'
+   : 'Chưa có kết quả trên máy; bấm “Tự thêm bài” để dùng không cần mạng.';
+ }
+}
+
 function lyrics(){const pre=$('lyrics');pre.replaceChildren();if(!current)return;current.content.split('\n').forEach((text,index)=>{const row=document.createElement('span');row.className='lyric-line';row.dataset.line=index;row.tabIndex=0;const matcher=/\[([A-G](?:#|b)?[^\]\n]{0,24})\]/g;let start=0,match;while((match=matcher.exec(text))){row.append(document.createTextNode(text.slice(start,match.index)));const span=document.createElement('span');span.className='chord';span.textContent='['+transpose(match[1],shift)+']';row.append(span);start=matcher.lastIndex}row.append(document.createTextNode(text.slice(start)||' '));row.addEventListener('click',()=>follow.select(index));pre.append(row)});$('key').textContent=transpose(current.key||'C',shift);$('lyrics').style.setProperty('--font',font+'px');$('font-size').textContent=font+'px'}
 function saveLabel(){const saved=current&&offline[songUrl(current.sourceUrl)];$('save-song').textContent=saved?'Đã lưu · Bỏ lưu':'Lưu ngoại tuyến';$('save-song').disabled=!current}
-async function openSong(value){const url=songUrl(value);if(!url)return;const id=++opening;closeVideo();$('video-tools').hidden=true;current=null;shift=0;stopScroll();$('reader-title').textContent='Đang mở bài…';$('reader-author').textContent='';$('lyrics').replaceChildren();$('credit').textContent='';$('reader-status').textContent='';saveLabel();if(!$('reader').open)$('reader').showModal();$('reader-body').scrollTop=0;try{let song=offline[url];if(!song){const data=await call('api',{path:'/api/reader?'+new URLSearchParams(url.startsWith('site:')?{id:url.slice(5)}:{url})});song=readerSong(data)}if(id!==opening||!$('reader').open)return;if(!validSong(song))throw new Error('Bài hát chưa có nội dung hợp lệ.');current=song;follow.onSong(song);document.body.classList.add('reader-open');videoChoices();$('reader-title').textContent=song.title;$('reader-author').textContent=song.author||'Lời & hợp âm';$('reader-status').textContent=offline[url]?'Bản ngoại tuyến trên thiết bị.':'';$('credit').textContent='Sáng tác: '+(song.author||'Chưa có thông tin')+'. Hợp âm dùng để tham khảo và luyện tập.';lyrics();saveLabel();call('awake',{enabled:true}).catch(()=>{})}catch(error){if(id!==opening)return;$('reader-title').textContent='Chưa mở được bài';$('reader-status').textContent=error.message+' · Bài này có thể mở trong kho Sites.';openSiteSearch($('query').value).catch(()=>{})}}
-async function toggleSaved(){if(!current)return;const url=songUrl(current.sourceUrl),draft={...offline};if(draft[url])delete draft[url];else{if(Object.keys(draft).length>=100){toast('Đã đủ 100 bài. Bỏ lưu một bài để thêm bài mới.');return}draft[url]={...current,savedAt:Date.now()}}const sanitized=offlineLibrary(draft);if(libraryBytes(sanitized)>2000000){toast('Thư viện đã đầy. Hãy bỏ lưu một số bài.');return}$('save-song').disabled=true;try{await call('save',{value:JSON.stringify(sanitized)});offline=sanitized;refreshSaved();saveLabel();toast(offline[url]?'Đã lưu. Bài này mở được khi mất mạng.':'Đã bỏ lưu bài trên thiết bị.')}catch(error){toast(error.message);saveLabel()}}
+async function openSong(value){const url=songUrl(value);if(!url)return;const id=++opening;closeVideo();$('video-tools').hidden=true;current=null;shift=0;stopScroll();$('reader-title').textContent='Đang mở bài…';$('reader-author').textContent='';$('lyrics').replaceChildren();$('credit').textContent='';$('reader-status').textContent='';saveLabel();if(!$('reader').open)$('reader').showModal();$('reader-body').scrollTop=0;try{let song=offlineFind(offline,url);if(!song){const data=await call('api',{path:'/api/reader?'+new URLSearchParams(url.startsWith('site:')?{id:url.slice(5)}:{url})});song=readerSong(data)}if(id!==opening||!$('reader').open)return;if(!validSong(song))throw new Error('Bài hát chưa có nội dung hợp lệ.');current=song;follow.onSong(song);document.body.classList.add('reader-open');videoChoices();$('reader-title').textContent=song.title;$('reader-author').textContent=song.author||'Lời & hợp âm';$('reader-status').textContent=offline[url]?'Bản ngoại tuyến trên thiết bị.':'';$('credit').textContent='Sáng tác: '+(song.author||'Chưa có thông tin')+'. Hợp âm dùng để tham khảo và luyện tập.';lyrics();saveLabel();call('awake',{enabled:true}).catch(()=>{})}catch(error){if(id!==opening)return;$('reader-title').textContent='Chưa mở được bài';$('reader-status').textContent=error.message+' · Bài này có thể mở trong kho Sites.';openSiteSearch($('query').value).catch(()=>{})}}
+async function toggleSaved(){if(!current)return;const url=songUrl(current.sourceUrl),draft={...offline};if(draft[url])delete draft[url];else{if(Object.keys(draft).length>=1000){toast('Đã đủ 1.000 bài. Bỏ lưu một bài để thêm bài mới.');return}draft[url]={...current,savedAt:Date.now()}}const sanitized=offlineLibrary(draft);if(libraryBytes(sanitized)>2000000){toast('Thư viện đã đầy. Hãy bỏ lưu một số bài.');return}$('save-song').disabled=true;try{await call('save',{value:JSON.stringify(sanitized)});offline=sanitized;refreshSaved();saveLabel();toast(offline[url]?'Đã lưu. Bài này mở được khi mất mạng.':'Đã bỏ lưu bài trên thiết bị.')}catch(error){toast(error.message);saveLabel()}}
 function stopScroll(){cancelAnimationFrame(scrollFrame);scrollFrame=0;scrollTime=0;scrollCarry=0;$('scroll').setAttribute('aria-pressed','false');$('scroll').textContent='▶ Cuộn đều'}
 function scrollStep(time){if(!scrollFrame)return;if(scrollTime){scrollCarry+=(time-scrollTime)/1000*Number($('scroll-speed').value);const pixels=Math.floor(scrollCarry);if(pixels){$('reader-body').scrollTop+=pixels;scrollCarry-=pixels}}scrollTime=time;if($('reader-body').scrollTop+$('reader-body').clientHeight>=$('reader-body').scrollHeight-1){stopScroll();return}scrollFrame=requestAnimationFrame(scrollStep)}
 function closeReader(){++opening;follow.stop();document.body.classList.remove('reader-open');$('reader-options').open=false;closeVideo();stopScroll();call('awake',{enabled:metroRunning}).catch(()=>{});if($('reader').open)$('reader').close()}
@@ -907,6 +1001,24 @@ async function updateMetro(){const bpm=bpmValue($('bpm').value);$('bpm').value=b
 document.querySelectorAll('[data-tab]').forEach(el=>el.addEventListener('click',()=>showTab(el.dataset.tab)));
 $('search').addEventListener('submit',e=>{e.preventDefault();searchRequested=true;page=0;mode='hot';$('query').blur();loadCatalog()});
 $('site-search').addEventListener('click',()=>openSiteSearch($('query').value).catch(e=>toast(e.message)));
+$('compose-new').addEventListener('click',()=>{$('compose-form').reset();$('compose-dialog').showModal()});
+$('compose-cancel').addEventListener('click',()=>$('compose-dialog').close());
+$('compose-form').addEventListener('submit',async event=>{
+ event.preventDefault();
+ const title=$('compose-title').value.trim(),author=$('compose-author').value.trim(),content=$('compose-content').value.trim(),key=$('compose-key').value;
+ if(!title||!content){toast('Cần tên bài và nội dung hợp âm.');return}
+ if(Object.keys(offline).length>=1000){toast('Bộ nhớ đã có 1.000 bài. Sao lưu hoặc bỏ bài cũ trước.');return}
+ const sourceUrl='local:custom-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,10);
+ const song={title,author:author||'Bài tập cá nhân',key,content,sourceUrl,savedAt:Date.now()};
+ if(!validSong(song)){toast('Nội dung bài chưa hợp lệ.');return}
+ const next=offlineLibrary({...offline,[sourceUrl]:song});
+ if(libraryBytes(next)>2000000){toast('Thư viện đã đầy 2 MB.');return}
+ try {
+  await call('save',{value:JSON.stringify(next)});
+  offline=next;refreshSaved();$('compose-dialog').close();page=0;loadCatalog();openSong(sourceUrl);
+  toast('Đã lưu bài vào thiết bị, không phụ thuộc Sites.');
+ }catch(error){toast('Chưa lưu được bài: '+error.message)}
+});
 $('genre').addEventListener('change',()=>{$('query').value='';page=0;mode='hot';loadCatalog()});$('type').addEventListener('change',()=>{if($('query').value.trim()){page=0;loadCatalog()}});
 $('latest').addEventListener('click',()=>{$('query').value='';$('genre').value='';mode='latest';page=0;loadCatalog()});
 $('more').addEventListener('click',()=>{if(hasMore){page++;loadCatalog()}});$('previous').addEventListener('click',()=>{if(page){page--;loadCatalog()}});
@@ -915,14 +1027,14 @@ $('listen').addEventListener('click',listen);$('video-close').addEventListener('
 $('tone-down').addEventListener('click',()=>{if(current){shift--;lyrics()}});$('tone-up').addEventListener('click',()=>{if(current){shift++;lyrics()}});$('tone-reset').addEventListener('click',()=>{shift=0;lyrics()});
 $('font-down').addEventListener('click',()=>{font=Math.max(14,font-2);lyrics()});$('font-up').addEventListener('click',()=>{font=Math.min(36,font+2);lyrics()});
 $('scroll').addEventListener('click',()=>{if(scrollFrame)stopScroll();else if(current){$('scroll').setAttribute('aria-pressed','true');$('scroll').textContent='Ⅱ Dừng cuộn';scrollFrame=requestAnimationFrame(scrollStep)}});
-$('share').addEventListener('click',()=>{if(current)call('share',{title:current.title,text:current.title+(current.author?' — '+current.author:'')+' · Góc Hợp Âm',url:SITES_HOME+'/?song='+encodeURIComponent(current.sourceUrl)}).catch(error=>toast(error.message))});
+$('share').addEventListener('click',()=>{if(current)call('share',{title:current.title,text:current.title+(current.author?' — '+current.author:'')+' · Góc Hợp Âm',url:current.sourceUrl?.startsWith('local:')?SITES_HOME+'/':SITES_HOME+'/?song='+encodeURIComponent(current.sourceUrl)}).catch(error=>toast(error.message))});
 $('bpm').addEventListener('input',updateMetro);$('beats').addEventListener('change',()=>{beatLights();updateMetro()});$('bpm-down').addEventListener('click',()=>{$('bpm').value=bpmValue(Number($('bpm').value)-5);updateMetro()});$('bpm-up').addEventListener('click',()=>{$('bpm').value=bpmValue(Number($('bpm').value)+5);updateMetro()});$('metro-toggle').addEventListener('click',()=>{metroRunning=!metroRunning;updateMetro()});
 let taps=[];$('tap-tempo').addEventListener('click',()=>{const now=Date.now();if(taps.length&&now-taps.at(-1)>2000)taps=[];taps.push(now);taps=taps.slice(-6);if(taps.length>1){$('bpm').value=bpmValue(60000*(taps.length-1)/(now-taps[0]));updateMetro()}});
 $('help').addEventListener('click',()=>call('help').catch(error=>toast(error.message)));
 $('clear-saved').addEventListener('click',()=>$('clear-confirm').hidden=false);$('cancel-clear').addEventListener('click',()=>$('clear-confirm').hidden=true);$('confirm-clear').addEventListener('click',async()=>{try{await call('save',{value:'{}'});offline=Object.create(null);refreshSaved();saveLabel();$('clear-confirm').hidden=true;toast('Đã xóa bài ngoại tuyến trên thiết bị.')}catch(error){toast(error.message)}});
 function pause(){if(studio.permissionPending||follow.permissionPending||musicTools.permissionPending)return;follow.stop();studio.onHide();closeVideo();stopScroll();metroRunning=false;stopWebMetro();call('metronome',{running:false,bpm:80,beats:4}).catch(()=>{});call('awake',{enabled:false}).catch(()=>{});metroLabel()}
 document.addEventListener('visibilitychange',()=>{if(document.hidden)pause()});window.addEventListener('nativePause',pause);window.addEventListener('pagehide',pause);
-beatLights();call('load').then(value=>{try{offline=offlineLibrary(JSON.parse(value))}catch{toast('Chưa đọc được thư viện ngoại tuyến.')}refreshSaved()}).catch(error=>toast(error.message));loadCatalog();
+beatLights();loadCatalog();call('load').then(value=>{try{offline=offlineLibrary(JSON.parse(value))}catch{toast('Chưa đọc được thư viện ngoại tuyến.')}refreshSaved();loadCatalog()}).catch(error=>toast(error.message));
 
 const follow=createFollow({call,native,toast,getSong:()=>current,getVideo:()=>currentVideo,stopRegular:stopScroll,onHighlight(index){document.querySelectorAll('.lyric-line').forEach(el=>el.classList.toggle('active',Number(el.dataset.line)===index));const el=document.querySelector('.lyric-line[data-line="'+index+'"]'),body=$('reader-body');if(el)body.scrollTo({top:Math.max(0,el.getBoundingClientRect().top-body.getBoundingClientRect().top+body.scrollTop-body.clientHeight*.35),behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'})}});
 window.GocVideoTick=event=>{if(event&&event.id===currentVideo&&Number.isFinite(event.time)){follow.onTick(event);if(event.error)$('video-status').textContent=event.error+' · thử Mở YouTube'}};

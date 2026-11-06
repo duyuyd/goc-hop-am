@@ -12,7 +12,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 const HOST = '0.0.0.0';
 
 app.use(express.json({ limit: '15mb' }));
@@ -63,13 +63,13 @@ app.get('/manifest.webmanifest', (req, res) => {
 app.get('/service-worker.js', (req, res) => {
   res.setHeader('Content-Type', 'application/javascript');
   res.send(`
-    const CACHE_NAME = 'goc-hop-am-cache-v1';
+    const CACHE_NAME = 'goc-hop-am-cache-v3';
     const ASSETS = ['/', '/index.html', '/app.css', '/bundle.js', '/icon.svg'];
     self.addEventListener('install', e => {
       e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
     });
     self.addEventListener('activate', e => {
-      e.waitUntil(self.clients.claim());
+      e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k.startsWith('goc-hop-am-cache-') && k !== CACHE_NAME).map(k => caches.delete(k)))).then(() => self.clients.claim()));
     });
     self.addEventListener('fetch', e => {
       if (e.request.url.includes('/api/')) return;

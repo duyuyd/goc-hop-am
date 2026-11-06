@@ -106,14 +106,14 @@ jobs:
           set -eu
           test -s qa-release/app-debug.apk
           unzip -t qa-release/app-debug.apk > /dev/null
-          mv qa-release/app-debug.apk qa-release/Goc_Hop_Am_Android_1.3.2_QA.apk
-          (cd qa-release && sha256sum Goc_Hop_Am_Android_1.3.2_QA.apk > SHA256SUMS.txt)
-          tag=v1.3.2-qa
+          mv qa-release/app-debug.apk qa-release/Goc_Hop_Am_Android_1.3.3_QA.apk
+          (cd qa-release && sha256sum Goc_Hop_Am_Android_1.3.3_QA.apk > SHA256SUMS.txt)
+          tag=v1.3.3-qa
           if gh release view "$tag" >/dev/null 2>&1; then
             echo "QA version already published. Keep the exact existing signing identity and release assets unchanged."
             exit 0
           fi
-          gh release create "$tag" qa-release/Goc_Hop_Am_Android_1.3.2_QA.apk qa-release/SHA256SUMS.txt \
+          gh release create "$tag" qa-release/Goc_Hop_Am_Android_1.3.3_QA.apk qa-release/SHA256SUMS.txt \
             --target "$GITHUB_SHA" --prerelease \
-            --title "Góc Hợp Âm Android 1.3.2 QA · Kiểm thử nhanh" \
-            --notes "APK QA cài song song bản 1.3.0 để kiểm tra thao tác Android, tìm bài Sites và công cụ nhạc trên thiết bị. Sửa nhận dạng WAV thực thuộc backend GitHub, KHÔNG đi vào APK và chưa triển khai lên Sites. Bản QA debug chưa được kiểm thử trên điện thoại thật; không thay thế bản chính."
+            --title "Góc Hợp Âm Android 1.3.3 QA · Thư viện ngoại tuyến" \
+            --notes "APK QA cài song song bản 1.3.0 để kiểm tra thao tác Android, tìm bài Sites và công cụ nhạc trên thiết bị. Thêm 12 bài tập hợp âm gốc đóng gói sẵn; tìm kiếm, tự tạo và lưu bài cá nhân ngay cả khi không có mạng. Không chứa toàn bộ kho nhạc Sites; tính năng lấy bài Sites vẫn cần mạng. Bản QA debug chưa được kiểm thử trên điện thoại thật; không thay thế bản chính."
