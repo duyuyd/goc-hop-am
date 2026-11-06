@@ -107,7 +107,7 @@ test('repairScore self-heals corrupted, out-of-range, and malformed sheets into 
   assert.ok(xml.includes('<score-partwise'));
 });
 
-test('autoSheetEngine self-heals when AI worker throws or crashes', async () => {
+test('autoSheetEngine refuses to invent melody from a corrupted audio file', async () => {
   // Create an engine instance
   const brokenAudioBytes = new Uint8Array([0, 1, 2, 3, 4]); // Not a valid audio file
   
@@ -118,16 +118,12 @@ test('autoSheetEngine self-heals when AI worker throws or crashes', async () => 
     songId: 'nang-tho'
   });
 
-  // Process the job - normally audio decoding throws on garbage bytes,
-  // but auto-repair must catch it and complete with a restored harmonic sheet!
+  // Invalid input must not be silently turned into a fake successful sheet.
   const processed = await autoSheetEngine.processJob(job.jobId);
-  assert.equal(processed.status, 'completed');
-  assert.ok(processed.score, 'Score must be present and recovered');
-  assert.equal(processed.origin, 'auto_repaired');
-  assert.equal(processed.score.origin, 'auto_repaired');
-  assert.ok(processed.score.notes.length > 0, 'Recovered score must have notes');
-  assert.ok(processed.analysis, 'Analysis must be attached');
-  assert.ok(processed.analysis.integrityScore >= 90);
+  assert.equal(processed.status, 'failed');
+  assert.deepEqual(processed.notes, []);
+  assert.equal(processed.musicxml, null);
+  assert.equal(processed.confidence, null);
 });
 
 test('browseCatalogSheets audits 100% catalog songs with full analysis and valid 4/4 meter', () => {

@@ -11,7 +11,7 @@ test('musicCatalog normalizes Vietnamese diacritics and finds songs by title and
   const result1 = musicCatalog.search({ query: 'nang tho' });
   assert.ok(result1.items.length > 0);
   assert.equal(result1.items[0].title, 'Nàng Thơ');
-  assert.equal(result1.items[0].sheets.melody.status, 'verified');
+  assert.equal(result1.items[0].sheets.melody.status, 'unverified');
 
   // NFD decomposition search
   const result2 = musicCatalog.search({ query: 'Nàng Thơ'.normalize('NFD') });
@@ -25,7 +25,7 @@ test('musicCatalog normalizes Vietnamese diacritics and finds songs by title and
   // Genre filtering
   const result4 = musicCatalog.search({ genre: '6' }); // Nhạc Đỏ
   assert.ok(result4.items.some(s => s.id === 'tien-quan-ca'));
-  assert.equal(result4.items.find(s => s.id === 'tien-quan-ca').sheets.melody.status, 'verified');
+  assert.equal(result4.items.find(s => s.id === 'tien-quan-ca').sheets.melody.status, 'unverified');
 });
 
 test('autoSheetEngine deduplicates jobs by SHA-256 and marks AI outputs as ai_draft', async () => {
@@ -59,22 +59,40 @@ test('autoSheetEngine deduplicates jobs by SHA-256 and marks AI outputs as ai_dr
   assert.equal(job2.jobId, job1.jobId);
 });
 
-test('autoSheetEngine handles audio transcription and preserves error queue without crashes', () => {
+test('audio does not fabricate notes, confidence, or recovered melody from random bytes', () => {
   const dummyAudio = Buffer.alloc(1024, 42);
-  const { job } = autoSheetEngine.createJob({
-    audioBytes: dummyAudio,
-    title: 'Bản thu giọng hát mẫu',
-    bpm: 84
-  });
-
-  assert.equal(job.status, 'completed');
+  const { job } = autoSheetEngine.createJob({ audioBytes: dummyAudio, title: 'Không phải audio' });
+  assert.equal(job.status, 'failed');
   assert.equal(job.verified, false);
-  assert.ok(job.notes.length > 0);
-  assert.ok(job.confidence >= 0.75);
-  assert.ok(job.musicxml.includes('<measure number="1">'));
+  assert.deepEqual(job.notes, []);
+  assert.equal(job.musicxml, null);
+  assert.equal(job.confidence, null);
+});
 
-  // Invalid empty job throws clear error
-  assert.throws(() => autoSheetEngine.createJob({}), /Cần cung cấp dữ liệu/);
+test('valid PCM16 WAV identifies actual pitches, while silence remains unrecognized', () => {
+  const rate = 11025, length = 2 * rate;
+  const wav = Buffer.alloc(44 + length * 2);
+  wav.write('RIFF'); wav.writeUInt32LE(wav.length - 8, 4); wav.write('WAVE', 8);
+  wav.write('fmt ', 12); wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20);
+  wav.writeUInt16LE(1, 22); wav.writeUInt32LE(rate, 24);
+  wav.writeUInt32LE(rate * 2, 28); wav.writeUInt16LE(2, 32); wav.writeUInt16LE(16, 34);
+  wav.write('data', 36); wav.writeUInt32LE(length * 2, 40);
+  for (let i = 0; i < length; i++) {
+    const hz = i < rate ? 261.6256 : 329.6276;
+    wav.writeInt16LE(Math.round(0.4 * Math.sin(2 * Math.PI * hz * i / rate) * 32767), 44 + i * 2);
+  }
+  const { job } = autoSheetEngine.createJob({ audioBytes: wav, title: 'C E thật', bpm: 60 });
+  assert.equal(job.status, 'completed');
+  assert.ok(job.notes.some(n => n.midi === 60));
+  assert.ok(job.notes.some(n => n.midi === 64));
+  assert.equal(job.verified, false);
+  assert.equal(job.confidence, null); // No benchmark available
+  assert.match(job.musicxml, /score-partwise/);
+  const blank = Buffer.from(wav);
+  blank.fill(0, 44);
+  const { job: silent } = autoSheetEngine.createJob({ audioBytes: blank, title: 'Im lặng' });
+  assert.equal(silent.status, 'failed');
+  assert.deepEqual(silent.notes, []);
 });
 
 test('securityRights blocks SSRF attempts and records audit ledger entries', () => {
@@ -94,7 +112,7 @@ test('securityRights blocks SSRF attempts and records audit ledger entries', () 
   const rights = securityRights.getRights('site:nang-tho');
   assert.ok(rights);
   assert.equal(rights.composer, 'Hoàng Dũng');
-  assert.equal(rights.rights, 'owned');
+  assert.equal(rights.rights, 'unknown');
 
   // Rate limiter
   const ip = '198.51.100.22';
