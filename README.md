@@ -1,4 +1,4 @@
-# Góc Hợp Âm · Android & iOS 1.3.0
+# Góc Hợp Âm · Website và Android/iOS (QA 1.3.3)
 
 **Tác giả dự án & người lập trình: NPT Duy.**
 
@@ -9,7 +9,17 @@ Tra bài hát, đọc hợp âm, đổi tông, lưu ngoại tuyến và tập c�
 - [Bản phát hành](https://github.com/duyuyd/goc-hop-am/releases)
 - [Trạng thái biên dịch thực tế](https://github.com/duyuyd/goc-hop-am/actions)
 
-## Bản 1.3.0
+## Bản thử 1.3.3: website + ứng dụng sử dụng được khi Sites mất kết nối
+
+- **Kho bài trên máy:** 12 bài **tập hợp âm nguyên bản** đóng gói vào `bundle.js`, không cần truy cập Sites. Đây là bài tập, không được gọi là sheet chuẩn của ca khúc thương mại.
+- **Bài cá nhân:** người dùng tự thêm tiêu đề, tác giả, tông, lời và hợp âm. Lưu tại thiết bị; tìm kiếm có dấu/không dấu NFC/NFD, đổi tông, cuộn chữ, luyện tập không cần mạng.
+- Lưu tối đa 1.000 mục trong ngân sách dữ liệu tối đa 2 MB (ưu tiên giới hạn dung lượng thực tế), giữ nguyên bản đã lưu từ các phiên trước.
+- Tìm trực tuyến với Sites vẫn còn, nhưng không chặn giao diện khi mạng lỗi. YouTube và kho bài chưa tải vẫn cần Internet.
+- **Dùng chung code web/app:** `public/mobile/index.html`, `bundle.js`, `app.css`; bản web cục bộ qua `npm start` (Node/Express) và ứng dụng có giao diện được đóng gói bên trong.
+- **Lưu ý:** cập nhật GitHub/QA APK **không tự cập nhật** Sites project `appgprj_6ae93d0e853c8191bc61999c745a657c`. Để triển khai đúng Sites hiện tại phải có quyền chỉnh sửa Sites, không lấy nhánh GitHub ghi đè.
+- Kiểm thử: `npm test`; xây giao diện đóng gói: `node mobile/scripts/prepare-web.mjs`; chạy web thử ở `http://localhost:3000` bằng `npm start`.
+
+## Lịch sử bản 1.3.0
 
 - Đọc phụ đề JSON3, XML, SRT, VTT và LRC; sửa nhận dữ liệu YouTube và báo rõ trường hợp bị chặn / rỗng / không có phụ đề. Phụ đề chèn vào hình không phải tệp mốc lời. Có chọn tệp, chỉnh lệch mốc và đánh dấu câu; không dùng micro để đoán lời video.
 - Kéo chỉnh khung YouTube 200–420 px để chừa chỗ đọc lời. Khung video vẫn hiển thị khi nghe.
@@ -49,6 +59,6 @@ xcodebuild -project mobile/ios/GocHopAm.xcodeproj -scheme GocHopAm \
 
 ## Phạm vi mã nguồn
 
-Kho công khai gồm giao diện ứng dụng và vỏ native Android/iOS. Kết nối API đọc kho bài công khai tại website. Không chứa backend riêng, tài khoản, cơ sở dữ liệu, tài liệu PDF, bản ghi của người dùng hoặc bí mật vận hành. Lời/hợp âm và video lấy từ kho kết nối khi dùng app; kho mã này không đóng gói các nội dung đó.
+Kho GitHub hiện chứa giao diện web/native, Node Express `server.mjs` với danh mục dữ liệu **mẫu**, và bộ xử lý sheet thử nghiệm. **Đây không phải backend, cơ sở dữ liệu, tài khoản hoặc file PDF thực của Sites**. Dữ liệu mà người dùng lưu trên app nằm riêng trên thiết bị; không tự đồng bộ lên tài khoản. Tập bài tập gốc đi kèm không có nghĩa mọi bài hát đều có sheet đã xác minh.
 
 Không có số liệu cài đặt/người dùng giả. Phiên bản, checksum APK và dung lượng thật được công bố tại [`android-release.json`](https://gochopam.pages.dev/downloads/android-release.json); kết quả build và commit xem trong Actions.
