@@ -4,6 +4,8 @@ import assert from 'node:assert/strict';
 import { musicCatalog } from '../lib/music-catalog.mjs';
 import { autoSheetEngine } from '../lib/auto-sheet-engine.mjs';
 import { securityRights } from '../lib/security-rights.mjs';
+import { cleanScore } from '../public/mobile/music-tools.js';
+import { scoreToMusicXML } from '../public/mobile/score-io.js';
 
 test('musicCatalog normalizes Vietnamese diacritics and finds songs by title and artist', () => {
   const result1 = musicCatalog.search({ query: 'nang tho' });
@@ -101,3 +103,39 @@ test('securityRights blocks SSRF attempts and records audit ledger entries', () 
     assert.equal(check.allowed, true);
   }
 });
+
+test('every catalog song has a complete sheet that passes cleanScore and scoreToMusicXML', () => {
+  for (const song of musicCatalog.songs) {
+    const melodyScore = autoSheetEngine.getSongSheet(song, 'melody');
+    assert.ok(melodyScore, `Score should exist for ${song.id}`);
+    assert.ok(melodyScore.notes.length > 0, `Notes should exist for ${song.id}`);
+    assert.doesNotThrow(() => cleanScore(melodyScore), `cleanScore should succeed for ${song.id} melody`);
+    assert.ok(melodyScore.musicxml.includes('score-partwise'), `MusicXML should be valid for ${song.id}`);
+
+    const pianoScore = autoSheetEngine.getSongSheet(song, 'piano');
+    assert.ok(pianoScore, `Piano score should exist for ${song.id}`);
+    assert.doesNotThrow(() => cleanScore(pianoScore), `cleanScore should succeed for ${song.id} piano`);
+
+    const organScore = autoSheetEngine.getSongSheet(song, 'organ');
+    assert.ok(organScore, `Organ score should exist for ${song.id}`);
+    assert.doesNotThrow(() => cleanScore(organScore), `cleanScore should succeed for ${song.id} organ`);
+  }
+});
+
+test('autoSheetEngine generates valid 4/4 harmonic scores for custom songs with chords', () => {
+  const customSong = {
+    id: 'bai-hat-tu-do',
+    title: 'Giai Điệu Mùa Thu',
+    composer: 'NPT Duy',
+    content: '[C]Gió mùa thu [Am]hát bên thềm vắng\n[F]Từng chiếc lá [G]rơi đầy lối về.'
+  };
+
+  const generated = autoSheetEngine.getSongSheet(customSong, 'melody');
+  assert.ok(generated);
+  assert.equal(generated.title, 'Giai Điệu Mùa Thu');
+  assert.equal(generated.origin, 'auto_chords');
+  assert.equal(generated.verified, false);
+  assert.doesNotThrow(() => cleanScore(generated));
+  assert.ok(generated.musicxml.includes('score-partwise'));
+});
+

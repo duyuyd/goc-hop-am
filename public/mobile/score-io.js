@@ -65,3 +65,235 @@ export function scoreToMusicXML(score){
  if(beats%4!==0)body+='</measure>';
  return head+body+'</part></score-partwise>';
 }
+const NOTE_NAMES=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+export function midiToNoteName(midi){
+ if(midi===null||midi===undefined)return 'Lặng';
+ const m=Number(midi);
+ if(!Number.isInteger(m))return 'Lặng';
+ const name=NOTE_NAMES[((m%12)+12)%12];
+ const oct=Math.floor(m/12)-1;
+ return name+oct;
+}
+export function repairScore(raw,fallbackSong=null){
+ const fixes=[];
+ let title='Bản nhạc tự động';
+ let author='Góc Hợp Âm AI';
+ let bpm=80;
+ let rawNotes=[];
+ let variant='melody';
+ if(typeof raw==='string'){
+  try{raw=JSON.parse(raw);fixes.push('Chuyển đổi chuỗi JSON sheet thành đối tượng bản nhạc')}
+  catch{fixes.push('Chuỗi sheet hỏng cú pháp, khởi tạo lại từ thông tin bài hát');raw=null}
+ }
+ if(raw&&typeof raw==='object'&&!Array.isArray(raw)){
+  if(typeof raw.title==='string'&&raw.title.trim())title=raw.title.trim().slice(0,100);
+  else if(fallbackSong?.title){title=fallbackSong.title;fixes.push('Khôi phục tiêu đề bài hát')}
+  if(typeof raw.author==='string')author=raw.author.slice(0,100);
+  else if(fallbackSong?.composer||fallbackSong?.artist){author=fallbackSong.composer||fallbackSong.artist;fixes.push('Khôi phục tác giả')}
+  if(Number.isFinite(raw.bpm)&&raw.bpm>=40&&raw.bpm<=240)bpm=Math.round(raw.bpm);
+  else if(raw.bpm){bpm=Math.max(40,Math.min(240,Math.round(Number(raw.bpm)||80)));fixes.push('Chuẩn hóa tempo BPM')}
+  if(Array.isArray(raw.notes))rawNotes=raw.notes;
+  if(raw.variant)variant=raw.variant;
+ }else if(fallbackSong){
+  title=fallbackSong.title||'Bản nhạc';
+  author=fallbackSong.composer||fallbackSong.artist||'Góc Hợp Âm AI';
+  fixes.push('Tạo cấu trúc bản nhạc mới từ dữ liệu bài hát');
+ }
+ const validDurations=[0.5,1,2,4];
+ const cleanedNotes=[];
+ let curBeat=0;
+ for(let i=0;i<rawNotes.length&&cleanedNotes.length<128;i++){
+  const n=rawNotes[i];
+  if(!n||typeof n!=='object')continue;
+  let b=Number(n.beats);
+  if(!validDurations.includes(b)){
+   if(!Number.isFinite(b)||b<=0)b=1;
+   else if(b<=0.75)b=0.5;
+   else if(b<=1.5)b=1;
+   else if(b<=3)b=2;
+   else b=4;
+   fixes.push(`Điều chỉnh trường độ nốt ${i+1} về ${b} phách chuẩn`);
+  }
+  let m=n.midi;
+  if(m!==null){
+   m=Math.round(Number(m));
+   if(!Number.isInteger(m)||Number.isNaN(m)){
+    m=null;
+    fixes.push(`Chuyển nốt ${i+1} có cao độ hỏng thành dấu lặng`);
+   }else if(m<48){
+    m=48+((m%12+12)%12);
+    fixes.push(`Nâng quãng nốt ${i+1} vào âm vực hát được (MIDI ${m})`);
+   }else if(m>84){
+    m=72+(m%12);
+    fixes.push(`Hạ quãng nốt ${i+1} vào âm vực hát được (MIDI ${m})`);
+   }
+  }
+  const spaceInMeasure=4-(curBeat%4);
+  if(b>spaceInMeasure){
+   const fitBeats=[2,1,0.5].find(d=>d<=spaceInMeasure)||0.5;
+   cleanedNotes.push({midi:m,beats:fitBeats});
+   curBeat+=fitBeats;
+   fixes.push(`Ngăn nốt ${i+1} tràn vạch nhịp 4/4 (cắt ${fitBeats} phách)`);
+  }else{
+   cleanedNotes.push({midi:m,beats:b});
+   curBeat+=b;
+  }
+ }
+ if(!cleanedNotes.length){
+  const rootPitches=[60,64,67,72,69,67,65,64,62,65,64,62,60,60,null];
+  const rootBeats=[1,1,1,1,1,1,1,1,1,1,1,1,1,1,2];
+  for(let i=0;i<rootPitches.length;i++){
+   cleanedNotes.push({midi:rootPitches[i],beats:rootBeats[i]});
+  }
+  fixes.push('Phục hồi giai điệu 4 ô nhịp chuẩn từ hòa âm');
+ }
+ curBeat=cleanedNotes.reduce((s,n)=>s+n.beats,0);
+ const remainder=curBeat%4;
+ if(remainder!==0){
+  let padLeft=4-remainder;
+  while(padLeft>0){
+   const padDuration=[2,1,0.5].find(d=>d<=padLeft)||0.5;
+   cleanedNotes.push({midi:null,beats:padDuration});
+   padLeft-=padDuration;
+   curBeat+=padDuration;
+  }
+  fixes.push(`Bổ sung ${4-remainder} phách dấu lặng hoàn thiện ô nhịp cuối 4/4`);
+ }
+ const repaired={
+  format:'goc-score-1',
+  title,
+  author,
+  bpm,
+  notes:cleanedNotes,
+  origin:fixes.length?'auto_repaired':(raw?.origin||'manual'),
+  verified:false,
+  variant,
+  repaired:fixes.length>0,
+  fixesApplied:fixes
+ };
+ try{
+  repaired.musicxml=scoreToMusicXML(repaired);
+ }catch{
+  repaired.notes=[{midi:60,beats:1},{midi:64,beats:1},{midi:67,beats:1},{midi:60,beats:1}];
+  repaired.musicxml=scoreToMusicXML(repaired);
+  fixes.push('Tạo lại MusicXML dự phòng khẩn cấp');
+ }
+ return repaired;
+}
+export function analyzeScore(score){
+ if(!score||!Array.isArray(score.notes)||!score.notes.length){
+  return {
+   integrityScore:0,
+   status:'invalid',
+   error:'Bản nhạc không có dữ liệu nốt hợp lệ.',
+   measuresCount:0,
+   noteCount:0,
+   restCount:0
+  };
+ }
+ const notes=score.notes;
+ let totalBeats=0,noteCount=0,restCount=0;
+ const pitches=[];
+ const durations={eighth:0,quarter:0,half:0,whole:0};
+ const pitchDistribution=Array(12).fill(0);
+ for(const n of notes){
+  const beats=Number(n.beats)||1;
+  totalBeats+=beats;
+  if(n.midi===null){
+   restCount++;
+  }else if(Number.isInteger(n.midi)){
+   noteCount++;
+   pitches.push(n.midi);
+   pitchDistribution[((n.midi%12)+12)%12]++;
+   if(beats===0.5)durations.eighth++;
+   else if(beats===1)durations.quarter++;
+   else if(beats===2)durations.half++;
+   else if(beats===4)durations.whole++;
+  }
+ }
+ const measuresCount=Math.ceil(totalBeats/4);
+ const lowestMidi=pitches.length?Math.min(...pitches):null;
+ const highestMidi=pitches.length?Math.max(...pitches):null;
+ const rangeSemitones=(lowestMidi!==null&&highestMidi!==null)?highestMidi-lowestMidi:0;
+ const averageMidi=pitches.length?Math.round(pitches.reduce((a,b)=>a+b,0)/pitches.length):60;
+ let stepsCount=0,leapsCount=0,extremeLeaps=0;
+ for(let i=1;i<pitches.length;i++){
+  const diff=Math.abs(pitches[i]-pitches[i-1]);
+  if(diff<=2)stepsCount++;
+  else if(diff>4)leapsCount++;
+  if(diff>12)extremeLeaps++;
+ }
+ const intervalsTotal=stepsCount+leapsCount||1;
+ const smoothnessPercent=Math.round((stepsCount/intervalsTotal)*100);
+ let singability='Dễ hát (giai điệu liền bậc, âm vực êm)';
+ if(rangeSemitones>16)singability='Khó (âm vực rộng trên quãng 10)';
+ else if(rangeSemitones>12)singability='Trung bình (quãng 8 chuẩn)';
+ const warnings=[];
+ let integrityScore=100;
+ if(totalBeats%4!==0){
+  integrityScore-=20;
+  warnings.push('Ô nhịp cuối chưa đủ 4 phách ('+totalBeats+' phách)');
+ }
+ if(pitches.some(p=>p<48||p>84)){
+  integrityScore-=25;
+  warnings.push('Có nốt nằm ngoài dải C3-C6');
+ }
+ if(extremeLeaps>0){
+  integrityScore-=15;
+  warnings.push('Có quãng nhảy xa trên 1 quãng tám giữa các nốt liên tiếp');
+ }else if(leapsCount>stepsCount*1.5){
+  integrityScore-=10;
+  warnings.push('Nhiều bước nhảy quãng lớn (> quãng 3), giai điệu nhảy vọt');
+ }
+ if(rangeSemitones>18){
+  integrityScore-=15;
+  warnings.push('Âm vực quá rộng ('+rangeSemitones+' bán âm), vượt cữ giọng thông thường');
+ }
+ if(noteCount===0){
+  integrityScore=0;
+  warnings.push('Bản nhạc chỉ có dấu lặng, thiếu nốt giai điệu');
+ }
+ integrityScore=Math.max(0,Math.min(100,integrityScore));
+ return {
+  title:score.title||'Bản nhạc',
+  author:score.author||'',
+  bpm:score.bpm||80,
+  measuresCount,
+  measureCount:measuresCount,
+  totalBeats,
+  beatsTotal:totalBeats,
+  notesCount:notes.length,
+  noteCount,
+  restCount,
+  meterFit:totalBeats%4===0,
+  lowestPitch:lowestMidi!==null?{midi:lowestMidi,name:midiToNoteName(lowestMidi)}:null,
+  highestPitch:highestMidi!==null?{midi:highestMidi,name:midiToNoteName(highestMidi)}:null,
+  pitchRange:{
+   minMidi:lowestMidi,
+   maxMidi:highestMidi,
+   minName:lowestMidi!==null?midiToNoteName(lowestMidi):'N/A',
+   maxName:highestMidi!==null?midiToNoteName(highestMidi):'N/A',
+   semitones:rangeSemitones
+  },
+  averagePitch:{midi:averageMidi,name:midiToNoteName(averageMidi)},
+  rangeSemitones,
+  singability,
+  vocalComfort:{tessitura:singability,rangeSemitones},
+  smoothnessPercent,
+  smoothness:{stepwisePercent:smoothnessPercent,stepsCount,leapsCount},
+  durations,
+  rhythmProfile:{
+   quarter:durations.quarter,
+   eighth:durations.eighth,
+   half:durations.half,
+   whole:durations.whole,
+   rests:restCount
+  },
+  pitchDistribution,
+  integrityScore,
+  qualityRating:integrityScore>=95?'Xuất sắc':integrityScore>=80?'Tốt':integrityScore>=60?'Cần cải thiện':'Hỏng',
+  warnings,
+  aiConfidence:score.origin==='manual'?1.0:score.origin==='auto_repaired'?0.96:0.88,
+  repaired:!!score.repaired
+ };
+}

@@ -83,8 +83,22 @@ $('github').addEventListener('click',()=>native?call('github'):window.open('http
 
 $('share-app').addEventListener('click',()=>call('share',{title:'Góc Hợp Âm',text:'Cùng tìm hợp âm và tập hát trên Góc Hợp Âm · NPT Duy',url:SITES_HOME+'/'}).catch(error=>toast(error.message)));
 
-const musicTools=createMusicTools({native,call,toast,getSong:()=>current});
+const musicTools=createMusicTools({native,call,toast,getSong:()=>current,getShift:()=>shift});
 $('music-open').addEventListener('click',()=>musicTools.open());$('reader-sheet').addEventListener('click',()=>musicTools.printLyrics());
+if($('reader-pdf'))$('reader-pdf').addEventListener('click',()=>musicTools.printLyrics());
+if($('reader-sheet-view'))$('reader-sheet-view').addEventListener('click',async()=>{
+ if(!current)return;
+ let s=current.score;
+ if(!s||!s.notes||!s.notes.length){
+  try{
+   const param=current.sourceUrl?.startsWith('site:')?{id:current.sourceUrl.slice(5)}:{url:current.sourceUrl};
+   const res=await call('api',{path:'/api/reader?'+new URLSearchParams(param)});
+   if(res?.song?.score){s=res.song.score;current.score=s}
+  }catch{}
+ }
+ if(s)musicTools.loadScore(s);
+ musicTools.open('score');
+});
 
 if(!native&&'serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('/service-worker.js').catch(()=>{});
 

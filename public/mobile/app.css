@@ -33,3 +33,24 @@
 .practice-keyboard-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
 .practice-keyboard-footer label{display:flex;align-items:center;gap:8px}
 .practice-keyboard-footer select{padding:6px 10px;font-size:12px;min-height:36px}
+.music-browse-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:16px 0}
+.stat-pill{background:#2a1f36;border:1px solid var(--border);border-radius:14px;padding:10px;text-align:center}
+.stat-pill small{display:block;font-size:10px;color:var(--muted);text-transform:uppercase}
+.stat-pill strong{display:block;margin-top:2px;font:700 18px/1.2 Georgia,serif;color:var(--gold)}
+.music-browse-list{display:grid;gap:10px;margin-top:16px;max-height:55dvh;overflow:auto}
+.browse-sheet-card{background:#281f34;border:1px solid var(--border);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:8px}
+.browse-card-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.browse-card-head strong{font-size:15px;color:var(--text)}
+.browse-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:12px;background:#3c2e4d;color:var(--gold)}
+.browse-badge.verified{background:#1e432c;color:#7ee787}
+.browse-badge.repaired{background:#4d301b;color:#f3a85b}
+.browse-meta{display:flex;flex-wrap:wrap;gap:10px;font-size:11px;color:var(--muted)}
+.browse-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+.browse-actions button{font-size:11px;padding:6px 12px;min-height:36px}
+.music-analysis-panel{background:#181322;border:1px solid var(--border);border-radius:16px;padding:16px;margin:16px 0}
+.analysis-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;border-bottom:1px solid #332644;padding-bottom:8px}
+.analysis-score-pill{background:#e5bd7922;color:var(--gold);border:1px solid var(--gold);padding:3px 10px;border-radius:20px;font-weight:700;font-size:12px}
+.analysis-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px;color:var(--muted)}
+.analysis-item strong{display:block;color:var(--text);font-size:13px;margin-top:2px}
+.analysis-warnings{margin-top:12px;padding:8px 12px;background:#351a24;border-radius:10px;color:#ffb0b0;font-size:11px}
+.analysis-fixes{margin-top:12px;padding:8px 12px;background:#1b3327;border-radius:10px;color:#85e89d;font-size:11px}

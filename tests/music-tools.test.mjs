@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {musicChord,cleanScore,scoreSvg} from '../public/mobile/music-tools.js';
+import {musicChord,cleanScore,scoreSvg,songToPrintableHTML,renderChordDiagramSVG,guitarChordShapes} from '../public/mobile/music-tools.js';
 import {detectMusicPitch,scoreFromPitches,transcribeMusicAudio} from '../public/mobile/pitch.js';
 test('chord notes and score rendering preserve pitch, rhythm and escaped user titles',()=>{
  assert.deepEqual(musicChord('C','maj7'),[60,64,67,71]);assert.deepEqual(musicChord('A','m'),[69,72,76]);assert.deepEqual(musicChord('bad',''),[]);
@@ -21,3 +21,30 @@ test('full audio pipeline produces an editable melody without fabricated silent 
  assert.ok(result.notes.some(n=>n.midi===60));assert.ok(result.notes.some(n=>n.midi===64));assert.doesNotThrow(()=>cleanScore({notes:result.notes}));
  await assert.rejects(()=>transcribeMusicAudio({sampleRate:rate,duration:1,numberOfChannels:1,getChannelData:()=>new Float32Array(rate)}),/Chưa nhận/);
 });
+test('songToPrintableHTML generates complete printable A4 HTML with chord diagrams and transposition',()=>{
+ const song = {
+  title: 'Nàng <Thơ>',
+  author: 'Hoàng Dũng',
+  key: 'C',
+  content: '[C]Em ngày em đánh rơi [Am]nụ cười vào [G/B]anh\nCó [F]nghe mùa thu vừa ghé.'
+ };
+ const html = songToPrintableHTML(song, 2); // Shift by +2 semitones
+ assert.ok(html.includes('Nàng &lt;Thơ&gt;'));
+ assert.ok(!html.includes('Nàng <Thơ>'));
+ assert.ok(html.includes('Hoàng Dũng'));
+ assert.ok(html.includes('Tông: D (+2)'));
+ assert.ok(html.includes('[D]'));
+ assert.ok(html.includes('[Bm]'));
+ assert.ok(html.includes('[A/C#]'));
+ assert.ok(html.includes('BẢNG HỢP ÂM TRONG BÀI'));
+ assert.ok(html.includes('chord-diagram'));
+ assert.ok(html.includes('@page{size:A4 portrait'));
+
+ // Test chord diagram generator directly
+ const diagC = renderChordDiagramSVG('C');
+ assert.ok(diagC.includes('<svg'));
+ assert.ok(diagC.includes('circle'));
+ const diagUnknown = renderChordDiagramSVG('CustomX99');
+ assert.ok(diagUnknown.includes('CustomX99'));
+});
+
