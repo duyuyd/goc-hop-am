@@ -119,6 +119,8 @@ app.get('/api/reader', (req, res) => {
 
     const requestedVariant = ['melody', 'piano', 'organ'].includes(variant) ? variant : 'melody';
     const score = autoSheetEngine.getSongSheet(song, requestedVariant);
+    const statusFor = value => value?.verified === true ? 'verified' :
+      value?.origin === 'manual_unverified' ? 'unverified' : value?.notes?.length ? 'ai_draft' : 'missing';
 
     res.json({
       song: {
@@ -134,13 +136,13 @@ app.get('/api/reader', (req, res) => {
         videoId: song.videoId,
         videos: song.videoId ? [{ id: song.videoId, label: 'Bản thu chính' }] : [],
         sheets: {
-          melody: { status: 'verified', origin: score?.origin || 'manual', notesCount: score?.notes?.length || 0 },
-          piano: { status: 'ready', origin: 'manual' },
-          organ: { status: 'ready', origin: 'manual' }
+          melody: { status: statusFor(autoSheetEngine.getSongSheet(song, 'melody')), origin: autoSheetEngine.getSongSheet(song, 'melody')?.origin || 'unknown', notesCount: autoSheetEngine.getSongSheet(song, 'melody')?.notes?.length || 0 },
+          piano: { status: statusFor(autoSheetEngine.getSongSheet(song, 'piano')), origin: autoSheetEngine.getSongSheet(song, 'piano')?.origin || 'unknown' },
+          organ: { status: statusFor(autoSheetEngine.getSongSheet(song, 'organ')), origin: autoSheetEngine.getSongSheet(song, 'organ')?.origin || 'unknown' }
         },
         score: score || null,
         analysis: score ? autoSheetEngine.analyzeScore(score) : null,
-        rights: song.rights || 'owned'
+        rights: song.rights || 'unknown'
       }
     });
   } catch (error) {
@@ -253,7 +255,7 @@ app.post('/api/auto-sheet/jobs', (req, res) => {
       midiBytes,
       songId,
       title: title || 'Bản nhạc tự động',
-      rights: rights || 'owned',
+      rights: rights || 'unknown',
       bpm: Number(bpm) || 80
     });
 
@@ -300,14 +302,14 @@ app.post('/api/auto-sheet/transcribe', (req, res) => {
 app.get('/api/security/audit', (req, res) => {
   const logs = securityRights.getAuditLogs({ limit: 100 });
   res.json({
-    framework: 'OWASP ASVS 5.0 Compliant',
+    framework: 'OWASP ASVS 5.0 — not audited',
     protection: {
-      rateLimiting: 'Active',
-      ssrfProtection: 'Active',
-      xssSanitization: 'Active',
-      sqlInjectionImmunity: 'Active',
-      rbacCheck: 'Enforced',
-      rightsLedger: 'Enabled'
+      rateLimiting: 'partial_in_memory',
+      ssrfProtection: 'url_helper_only',
+      xssSanitization: 'not_audited',
+      sqlInjectionImmunity: 'not_audited',
+      rbacCheck: 'not_implemented_here',
+      rightsLedger: 'metadata_unverified'
     },
     auditLogs: logs
   });
