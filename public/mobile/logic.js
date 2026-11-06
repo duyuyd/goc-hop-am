@@ -31,7 +31,7 @@ export function videoList(song={}){
 export function videoEmbed(value,origin){const id=videoId(value);if(!id)return null;const u=new URL('https://www.youtube-nocookie.com/embed/'+id);u.search=new URLSearchParams({playsinline:'1',controls:'1',rel:'0',autoplay:'0',fs:'0',origin:new URL(origin).origin}).toString();return u.href;}
 export function offlineLibrary(value){
  const result=Object.create(null);if(!value||typeof value!=='object'||Array.isArray(value))return result;
- for(const item of Object.values(value).slice(0,100))if(validSong(item)){const url=songUrl(item.sourceUrl);result[url]={title:item.title,author:String(item.author||'').slice(0,400),key:/^[A-G][#b]?m?$/.test(item.key)?item.key:'C',content:item.content,sourceUrl:url,videos:videoList(item),savedAt:Number(item.savedAt)||0};}
+ for(const item of Object.values(value).slice(0,1000))if(validSong(item)){const url=songUrl(item.sourceUrl);result[url]={title:item.title,author:String(item.author||'').slice(0,400),key:/^[A-G][#b]?m?$/.test(item.key)?item.key:'C',content:item.content,sourceUrl:url,videos:videoList(item),savedAt:Number(item.savedAt)||0};}
  return result;
 }
 export function catalogItems(data){
