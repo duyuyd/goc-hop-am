@@ -54,3 +54,13 @@
 .analysis-item strong{display:block;color:var(--text);font-size:13px;margin-top:2px}
 .analysis-warnings{margin-top:12px;padding:8px 12px;background:#351a24;border-radius:10px;color:#ffb0b0;font-size:11px}
 .analysis-fixes{margin-top:12px;padding:8px 12px;background:#1b3327;border-radius:10px;color:#85e89d;font-size:11px}
+
+/* Local-first song composer: same layout on website, Android and iOS. */
+.offline-actions{display:flex;flex-wrap:wrap;gap:.65rem;margin:1rem 0}
+.offline-actions button{flex:1 1 12rem;min-height:46px;white-space:normal}
+#compose-dialog{color:#f2e9d8;background:#21192e;border:1px solid #a38354;border-radius:16px;max-width:min(94vw,540px);width:100%;max-height:90vh;overflow-y:auto;padding:1.3rem;box-shadow:0 15px 50px #0008}
+#compose-dialog::backdrop{background:#000a}
+#compose-form{display:grid;gap:.9rem}
+#compose-form label{display:grid;gap:.4rem}
+#compose-form input,#compose-form textarea,#compose-form select{width:100%;box-sizing:border-box;background:#181221;border:1px solid #77647e;color:#fff;border-radius:8px;padding:.75rem;font:inherit}
+#compose-form textarea{white-space:pre-wrap;line-height:1.55}
