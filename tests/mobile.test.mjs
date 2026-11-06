@@ -14,7 +14,7 @@ test('offline imports reject foreign hosts, credentials, private URLs and malfor
 });
 test('offline library bounds and UTF-8 accounting work for Vietnamese lyrics',()=>{
  const songs=Object.fromEntries(Array.from({length:120},(_,i)=>[i,{...song,sourceUrl:`https://hopamviet.vn/chord/song/bai-hat/A${i}.html`} ]));
- assert.equal(Object.keys(offlineLibrary(songs)).length,100);
+ assert.equal(Object.keys(offlineLibrary(songs)).length,120);
  assert.ok(libraryBytes({text:'Âm nhạc'})>JSON.stringify({text:'Âm nhạc'}).length);
 });
 test('transposition preserves slash bass and chord quality through negative and octave shifts',()=>{
