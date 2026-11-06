@@ -1,17 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {songUrl,validSong,offlineLibrary,catalogItems,transpose,bpmValue,libraryBytes,videoId,videoList,videoEmbed,DEFAULT_EQ,EQ_PRESETS,sanitizeEQ} from '../public/mobile/logic.js';
+import {songUrl,validSong,offlineLibrary,catalogItems,transpose,bpmValue,libraryBytes,videoId,videoList,videoEmbed} from '../public/mobile/logic.js';
 const url='https://hopamviet.vn/chord/song/nang-tho/W8IU6E0B.html';
 const song={title:'Nàng thơ',author:'Hoàng Dũng',content:'[C]Bài tập [G/B]',key:'C',sourceUrl:url};
-test('equalizer configuration sanitizes values within bounds and provides expected presets',()=>{
- assert.deepEqual(sanitizeEQ(null),DEFAULT_EQ);
- assert.deepEqual(sanitizeEQ({bass:99,mid:-50,treble:15,gain:300}),{bass:12,mid:-12,treble:12,gain:150,preset:'custom'});
- assert.equal(sanitizeEQ({bass:6,mid:0,treble:-1,gain:95,preset:'bass-boost'}).preset,'bass-boost');
- assert.ok(EQ_PRESETS['bass-boost'].bass>0);
- assert.ok(EQ_PRESETS['bright'].treble>0);
-});
-
 test('offline imports reject foreign hosts, credentials, private URLs and malformed songs',()=>{
  for(const value of ['https://example.com/chord/song/nang-tho/W8IU6E0B.html','https://hopamviet.vn.evil.test/chord/song/nang-tho/W8IU6E0B.html','https://user@hopamviet.vn/chord/song/nang-tho/W8IU6E0B.html','javascript:alert(1)','https://hopamviet.vn/admin'])assert.equal(songUrl(value),null);
  assert.equal(validSong({...song,content:''}),false);

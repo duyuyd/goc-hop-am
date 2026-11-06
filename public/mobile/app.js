@@ -1,4 +1,4 @@
-import {transpose,songUrl,validSong,offlineLibrary,catalogItems,readerSong,libraryBytes,bpmValue,videoId,videoList,videoEmbed,DEFAULT_EQ,EQ_PRESETS,sanitizeEQ} from './logic.js';
+import {transpose,songUrl,validSong,offlineLibrary,catalogItems,readerSong,libraryBytes,bpmValue,videoId,videoList,videoEmbed} from './logic.js';
 const $=id=>document.getElementById(id),pending=new Map();let seq=0;
 const native=!!(window.GocAndroid||window.webkit?.messageHandlers?.goc);
 const SITES_HOME='https://goc-hop-am.onwardcrust.chatgpt.site';let searchRequested=false;
@@ -126,13 +126,6 @@ $('video-size-mobile').addEventListener('input',videoSize);$('video-compact-mobi
   ];
 
   let pAudioCtx = null;
-  let eqChain = null;
-  let currentEQ = { ...DEFAULT_EQ };
-  try {
-    const rawEQ = JSON.parse(localStorage.getItem('goc-eq-settings-v1') || 'null');
-    if (rawEQ) currentEQ = sanitizeEQ(rawEQ);
-  } catch {}
-
   let activeNotes = new Set();
   let fallingNotes = []; // { midi, y, height, active }
   let practiceMidiAccess = null;
@@ -142,54 +135,12 @@ $('video-size-mobile').addEventListener('input',videoSize);$('video-compact-mobi
       pAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
     }
     if (pAudioCtx.state === 'suspended') pAudioCtx.resume();
-    if (!eqChain) {
-      const bass = pAudioCtx.createBiquadFilter();
-      bass.type = 'lowshelf';
-      bass.frequency.value = 200;
-      bass.gain.value = currentEQ.bass;
-
-      const mid = pAudioCtx.createBiquadFilter();
-      mid.type = 'peaking';
-      mid.frequency.value = 1000;
-      mid.Q.value = 1.0;
-      mid.gain.value = currentEQ.mid;
-
-      const treble = pAudioCtx.createBiquadFilter();
-      treble.type = 'highshelf';
-      treble.frequency.value = 4500;
-      treble.gain.value = currentEQ.treble;
-
-      const master = pAudioCtx.createGain();
-      master.gain.value = (currentEQ.gain || 100) / 100;
-
-      bass.connect(mid);
-      mid.connect(treble);
-      treble.connect(master);
-      master.connect(pAudioCtx.destination);
-
-      eqChain = { input: bass, bass, mid, treble, master };
-    }
     return pAudioCtx;
-  }
-
-  function getAudioDestination() {
-    const actx = getAudioCtx();
-    return eqChain ? eqChain.input : actx.destination;
-  }
-
-  function applyEQToNodes() {
-    if (!eqChain || !pAudioCtx) return;
-    const now = pAudioCtx.currentTime;
-    eqChain.bass.gain.setTargetAtTime(currentEQ.bass, now, 0.02);
-    eqChain.mid.gain.setTargetAtTime(currentEQ.mid, now, 0.02);
-    eqChain.treble.gain.setTargetAtTime(currentEQ.treble, now, 0.02);
-    eqChain.master.gain.setTargetAtTime((currentEQ.gain || 100) / 100, now, 0.02);
   }
 
   function playTone(midi, length = 0.7) {
     try {
       const actx = getAudioCtx();
-      const dest = getAudioDestination();
       const freq = 440 * 2 ** ((midi - 69) / 12);
       const timbre = $('practice-timbre')?.value || 'piano';
       const now = actx.currentTime;
@@ -201,7 +152,7 @@ $('video-size-mobile').addEventListener('input',videoSize);$('video-compact-mobi
           osc.frequency.value = freq * h;
           gain.gain.setValueAtTime([0.08, 0.05, 0.03][idx], now);
           gain.gain.exponentialRampToValueAtTime(0.001, now + length);
-          osc.connect(gain).connect(dest);
+          osc.connect(gain).connect(actx.destination);
           osc.start(now);
           osc.stop(now + length + 0.03);
         });
@@ -214,7 +165,7 @@ $('video-size-mobile').addEventListener('input',videoSize);$('video-compact-mobi
         filter.frequency.exponentialRampToValueAtTime(freq * 0.8, now + length * 0.8);
         gain.gain.setValueAtTime(0.14, now);
         gain.gain.exponentialRampToValueAtTime(0.001, now + length);
-        osc.connect(filter).connect(gain).connect(dest);
+        osc.connect(filter).connect(gain).connect(actx.destination);
         osc.start(now);
         osc.stop(now + length + 0.03);
       } else {
@@ -224,7 +175,7 @@ $('video-size-mobile').addEventListener('input',videoSize);$('video-compact-mobi
         gain.gain.setValueAtTime(0, now);
         gain.gain.linearRampToValueAtTime(0.12, now + 0.02);
         gain.gain.exponentialRampToValueAtTime(0.001, now + Math.max(0.05, length));
-        osc.connect(gain).connect(dest);
+        osc.connect(gain).connect(actx.destination);
         osc.start(now);
         osc.stop(now + length + 0.03);
       }
@@ -463,119 +414,5 @@ $('video-size-mobile').addEventListener('input',videoSize);$('video-compact-mobi
     requestAnimationFrame(drawPianoRoll);
   }
 
-  // --- Equalizer UI Controller & Personalization ---
-  function syncEQUI() {
-    if (!$('eq-bass')) return;
-    $('eq-bass').value = currentEQ.bass;
-    $('eq-mid').value = currentEQ.mid;
-    $('eq-treble').value = currentEQ.treble;
-    $('eq-gain').value = currentEQ.gain;
-
-    $('eq-bass-val').textContent = (currentEQ.bass > 0 ? '+' : '') + currentEQ.bass + ' dB';
-    $('eq-mid-val').textContent = (currentEQ.mid > 0 ? '+' : '') + currentEQ.mid + ' dB';
-    $('eq-treble-val').textContent = (currentEQ.treble > 0 ? '+' : '') + currentEQ.treble + ' dB';
-    $('eq-gain-val').textContent = currentEQ.gain + '%';
-
-    if ($('eq-bass-meter')) $('eq-bass-meter').style.width = Math.round(((currentEQ.bass + 12) / 24) * 100) + '%';
-    if ($('eq-mid-meter')) $('eq-mid-meter').style.width = Math.round(((currentEQ.mid + 12) / 24) * 100) + '%';
-    if ($('eq-treble-meter')) $('eq-treble-meter').style.width = Math.round(((currentEQ.treble + 12) / 24) * 100) + '%';
-    if ($('eq-gain-meter')) $('eq-gain-meter').style.width = Math.round(((currentEQ.gain - 20) / 130) * 100) + '%';
-
-    if ($('eq-preset-select')) $('eq-preset-select').value = currentEQ.preset;
-    document.querySelectorAll('.eq-pill').forEach(pill => {
-      pill.classList.toggle('active', pill.dataset.preset === currentEQ.preset);
-    });
-  }
-
-  function saveEQSettings() {
-    try {
-      localStorage.setItem('goc-eq-settings-v1', JSON.stringify(currentEQ));
-    } catch {}
-  }
-
-  function setPreset(name, preview = false) {
-    const p = EQ_PRESETS[name];
-    if (!p) return;
-    currentEQ.bass = p.bass;
-    currentEQ.mid = p.mid;
-    currentEQ.treble = p.treble;
-    currentEQ.gain = p.gain;
-    currentEQ.preset = name;
-    syncEQUI();
-    applyEQToNodes();
-    saveEQSettings();
-    if (preview) {
-      triggerNoteOn(60);
-      setTimeout(() => triggerNoteOff(60), 300);
-      setTimeout(() => {
-        triggerNoteOn(67);
-        setTimeout(() => triggerNoteOff(67), 350);
-      }, 150);
-    }
-  }
-
-  function onSliderInput() {
-    currentEQ.bass = Number($('eq-bass').value) || 0;
-    currentEQ.mid = Number($('eq-mid').value) || 0;
-    currentEQ.treble = Number($('eq-treble').value) || 0;
-    currentEQ.gain = Number($('eq-gain').value) || 100;
-
-    let match = 'custom';
-    for (const [key, p] of Object.entries(EQ_PRESETS)) {
-      if (key !== 'custom' && p.bass === currentEQ.bass && p.mid === currentEQ.mid && p.treble === currentEQ.treble && p.gain === currentEQ.gain) {
-        match = key;
-        break;
-      }
-    }
-    currentEQ.preset = match;
-    syncEQUI();
-    applyEQToNodes();
-    saveEQSettings();
-  }
-
-  ['eq-bass', 'eq-mid', 'eq-treble', 'eq-gain'].forEach(id => {
-    if ($(id)) $(id).addEventListener('input', onSliderInput);
-  });
-
-  if ($('eq-preset-select')) {
-    $('eq-preset-select').addEventListener('change', () => {
-      setPreset($('eq-preset-select').value, true);
-    });
-  }
-
-  document.querySelectorAll('.eq-pill').forEach(pill => {
-    pill.addEventListener('click', () => {
-      const p = pill.dataset.preset;
-      if (p) setPreset(p, true);
-    });
-  });
-
-  if ($('eq-reset')) {
-    $('eq-reset').addEventListener('click', () => {
-      currentEQ = { ...DEFAULT_EQ };
-      syncEQUI();
-      applyEQToNodes();
-      saveEQSettings();
-      toast('Đã đặt lại bộ cân bằng âm thanh (Flat · 0 dB).');
-    });
-  }
-
-  if ($('eq-test-tone')) {
-    $('eq-test-tone').addEventListener('click', () => {
-      const arpeggio = [60, 64, 67, 72, 76];
-      getAudioCtx();
-      arpeggio.forEach((note, idx) => {
-        setTimeout(() => {
-          triggerNoteOn(note);
-          setTimeout(() => triggerNoteOff(note), 400);
-        }, idx * 160);
-      });
-      toast('Đang thử âm thanh với cấu hình EQ ♫');
-    });
-  }
-
-  syncEQUI();
-
   drawPianoRoll();
 })();
-
