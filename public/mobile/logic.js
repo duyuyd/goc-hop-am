@@ -6,6 +6,7 @@ export function transpose(chord,shift=0){
 }
 export function songUrl(value){
  const text=String(value||'').trim();if(/^site:[A-Za-z0-9._~-]{1,180}$/.test(text))return text;
+ if(/^local:(?:practice-[0-9]{2}|custom-[A-Za-z0-9_-]{1,90})$/.test(text))return text;
  try{
   const u=new URL(text);if(u.protocol!=='https:'||u.username||u.password||u.port||text.length>2048)return null;
   if(u.origin==='https://hopamviet.vn'&&/^\/chord\/song\/[a-z0-9-]+\/[A-Za-z0-9]+\.html$/.test(u.pathname))return u.origin+u.pathname;
