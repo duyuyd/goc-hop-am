@@ -52,3 +52,29 @@ export function readerSong(data){
 }
 export function libraryBytes(library){return new TextEncoder().encode(JSON.stringify(library)).length}
 export function bpmValue(value){return Math.max(40,Math.min(240,Math.round(Number(value)||80)))}
+export const DEFAULT_EQ = {
+ bass: 0,
+ mid: 0,
+ treble: 0,
+ gain: 100,
+ preset: 'flat'
+};
+export const EQ_PRESETS = {
+ 'flat': { bass: 0, mid: 0, treble: 0, gain: 100, label: 'Mặc định (Flat)' },
+ 'bass-boost': { bass: 6, mid: 0, treble: -1, gain: 95, label: 'Tăng Trầm (Bass Boost)' },
+ 'acoustic': { bass: 3, mid: 1, treble: 4, gain: 100, label: 'Acoustic · Mộc' },
+ 'vocal': { bass: -2, mid: 5, treble: 3, gain: 100, label: 'Luyện thanh · Vocal' },
+ 'bright': { bass: -2, mid: 2, treble: 6, gain: 100, label: 'Sáng tiếng · Bright' },
+ 'warm': { bass: 5, mid: 2, treble: -3, gain: 105, label: 'Ấm áp · Warm' },
+ 'custom': { bass: 0, mid: 0, treble: 0, gain: 100, label: 'Tùy chỉnh' }
+};
+export function sanitizeEQ(value){
+ if(!value||typeof value!=='object'||Array.isArray(value))return {...DEFAULT_EQ};
+ const bass=Math.max(-12,Math.min(12,Math.round(Number(value.bass)||0)));
+ const mid=Math.max(-12,Math.min(12,Math.round(Number(value.mid)||0)));
+ const treble=Math.max(-12,Math.min(12,Math.round(Number(value.treble)||0)));
+ const gain=Math.max(20,Math.min(150,Math.round(Number(value.gain)||100)));
+ const preset=typeof value.preset==='string'&&EQ_PRESETS[value.preset]?value.preset:'custom';
+ return {bass,mid,treble,gain,preset};
+}
+
