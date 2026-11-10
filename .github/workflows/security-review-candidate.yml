@@ -73,7 +73,6 @@ jobs:
     permissions:
       contents: read
       security-events: read
-      dependabot: read
     steps:
       - name: Query GitHub security alert summaries
         env:
