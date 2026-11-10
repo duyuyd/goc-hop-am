@@ -12,6 +12,7 @@ const eslintConfig = defineConfig([
     ".sites-runtime/**",
     "outputs/**",
     "work/**",
+    "public/mobile/vendor/pdf-engine.js", // prebuilt, minified vendor bundle
   ]),
   {
     files: ["components/ui/**/*.{ts,tsx}", "hooks/use-mobile.ts"],
