@@ -1,0 +1,11 @@
+{
+  "name": "Góc Hợp Âm",
+  "ios_subtitle": "Tra cứu hợp âm và tập nhịp",
+  "play_short_description": "Tra cứu hợp âm, đổi tông, lưu bài ngoại tuyến và tập với máy đếm nhịp.",
+  "full_description": "Mang giai điệu theo bạn với Góc Hợp Âm. Tìm bài theo tên, ca sĩ hoặc nhạc sĩ; khám phá các thể loại và bài mới cập nhật.\n\nĐọc lời và hợp âm trong một màn hình gọn gàng. Đổi tông theo giọng hát, tăng giảm cỡ chữ và bật tự cuộn để hai tay thoải mái chơi nhạc.\n\nNghe YouTube ngay khi đọc lời và hợp âm, chọn bản thu hoặc dán liên kết video. Video cần Internet và phụ thuộc quyền phát nhúng của từng bản thu.\n\nLưu các bài bạn thích trên thiết bị để mở lại khi không có mạng, tối đa 100 bài trong 2 MB. Máy đếm nhịp 40–240 BPM với 2, 3, 4 hoặc 6 phách hỗ trợ buổi tập hằng ngày.\n\nBản 1.1 không yêu cầu tài khoản và không có thanh toán trong ứng dụng. Tìm kiếm và tải bài mới cần kết nối Internet; bài đã lưu và máy đếm nhịp hoạt động ngoại tuyến.",
+  "ios_keywords": "hợp âm,guitar,piano,organ,chuyển tông,lời bài hát,metronome,đếm nhịp",
+  "privacy_url": "https://gochopam.pages.dev/mobile/privacy.html",
+  "support_url": "https://gochopam.pages.dev/huong-dan",
+  "release_notes": "Thêm YouTube cùng hợp âm, chọn bản thu và dán liên kết; thêm Giới thiệu tác giả NPT Duy; cải thiện trạng thái tìm kiếm và màn hình khởi động.",
+  "review_notes": "No sign-in or demo credentials are required. Search and new song retrieval use the public Góc Hợp Âm API. Open any available song and tap Lưu ngoại tuyến, then open it from Đã lưu without a network connection. Tập nhịp works offline with native audio. Tap YouTube in the song reader to open a separate native player above the lyrics; video requires network and closes when leaving the song or application. YouTube embeds may display YouTube ads. The app contains no in-app purchases, subscription or account creation. No background audio entitlement is requested: the metronome stops when the app is inactive."
+}

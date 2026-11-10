@@ -1,7 +1,6 @@
 import UIKit
 import WebKit
 import AVFoundation
-import SafariServices
 
 private final class NoRedirects: NSObject, URLSessionTaskDelegate {
     func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) { completionHandler(nil) }
@@ -28,10 +27,11 @@ private final class PlayerMetrics: NSObject, WKScriptMessageHandler {
     }
 }
 private final class BundledUI: NSObject, WKURLSchemeHandler {
-    private let names: Set<String> = ["index.html", "bundle.js", "app.css", "icon.svg"]
+    private let names: Set<String> = ["index.html", "bundle.js", "app.css", "icon.svg", "pdf-engine.js"]
     func webView(_ webView: WKWebView, start urlSchemeTask: WKURLSchemeTask) {
         guard let url = urlSchemeTask.request.url, url.host == "bundle" else { urlSchemeTask.didFailWithError(URLError(.badURL)); return }
-        let name = url.path == "/" ? "index.html" : String(url.path.dropFirst())
+        let pathName = url.path == "/" ? "index.html" : String(url.path.dropFirst())
+        let name = pathName == "vendor/pdf-engine.js" ? "pdf-engine.js" : pathName
         guard names.contains(name), let location = Bundle.main.url(forResource: name, withExtension: nil), let data = try? Data(contentsOf: location) else { urlSchemeTask.didFailWithError(URLError(.fileDoesNotExist)); return }
         let mime = name.hasSuffix(".js") ? "application/javascript" : name.hasSuffix(".css") ? "text/css" : name.hasSuffix(".svg") ? "image/svg+xml" : "text/html"
         urlSchemeTask.didReceive(URLResponse(url: url, mimeType: mime, expectedContentLength: data.count, textEncodingName: "utf-8"))
@@ -58,7 +58,7 @@ final class MusicViewController: UIViewController, WKScriptMessageHandler, WKNav
     private var timer: DispatchSourceTimer?
     private var players: [AVAudioPlayer] = []
     private var beat = 0
-    private let apiOrigin = "https://goc-hop-am.onwardcrust.chatgpt.site"
+    private let apiOrigin = "https://gochopam.pages.dev"
     private let redirectGuard = NoRedirects()
     private lazy var session: URLSession = {
         let config = URLSessionConfiguration.ephemeral
@@ -176,7 +176,8 @@ final class MusicViewController: UIViewController, WKScriptMessageHandler, WKNav
             case "readAudio":
                 guard documentRequest == nil else { reply(id, false, "Đang chọn một tệp khác."); return }
                 documentRequest = id; readingAudio = true
-                let audioPicker = UIDocumentPickerViewController(documentTypes: ["public.audio"], in: .import)
+                let types = (args["kind"] as? String ?? "audio") == "audio" ? ["public.audio"] : ["public.data"]
+                let audioPicker = UIDocumentPickerViewController(documentTypes: types, in: .import)
                 audioPicker.delegate = self; audioPicker.allowsMultipleSelection = false
                 present(audioPicker, animated: true); return
             case "readText":
@@ -186,9 +187,9 @@ final class MusicViewController: UIViewController, WKScriptMessageHandler, WKNav
                 picker.delegate = self; picker.allowsMultipleSelection = false
                 present(picker, animated: true); return
             case "saveText":
-                guard let text = args["text"] as? String, let bytes = text.data(using: .utf8), bytes.count <= 250_000 else { reply(id, false, "Tệp quá lớn."); return }
-                let fileName = (args["name"] as? String) == "Goc_Hop_Am_Sheet.musicxml" ? "Goc_Hop_Am_Sheet.musicxml" : "Goc_Hop_Am_Sheet.json"
-                let file = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+                guard let text = args["text"] as? String, let bytes = text.data(using: .utf8), bytes.count <= 1_500_000 else { reply(id, false, "Tệp quá lớn."); return }
+                let name = (args["name"] as? String)?.hasSuffix(".musicxml") == true ? "Goc_Hop_Am_Sheet.musicxml" : "Goc_Hop_Am_Sheet.json"
+                let file = FileManager.default.temporaryDirectory.appendingPathComponent(name)
                 try bytes.write(to: file, options: .atomic)
                 let export = UIActivityViewController(activityItems: [file], applicationActivities: nil)
                 export.popoverPresentationController?.sourceView = web
@@ -206,22 +207,20 @@ final class MusicViewController: UIViewController, WKScriptMessageHandler, WKNav
                 guard let videoID = args["id"] as? String else { reply(id, false, "Video không hợp lệ."); return }
                 try showVideo(id: videoID)
             case "videoClose": closeVideo(notify: false)
+            case "sheetExternal":
+                guard let path = args["path"] as? String, path.hasPrefix("/api/song-sheet?"), path.count < 2000, !path.contains("#"), !path.contains("\r"), !path.contains("\n"), let url = URL(string: apiOrigin + path) else { reply(id, false, "Bản phổ không hợp lệ."); return }
+                UIApplication.shared.open(url)
+            case "videoPause": videoWeb?.evaluateJavaScript("window.GocPause && window.GocPause()", completionHandler: nil)
             case "videoExternal":
                 guard let videoID = args["id"] as? String, videoID.range(of: "^[A-Za-z0-9_-]{11}$", options: .regularExpression) != nil else { reply(id, false, "Video không hợp lệ."); return }
                 closeVideo(notify: true)
                 UIApplication.shared.open(URL(string: "https://www.youtube.com/watch?v=" + videoID)!)
-            case "siteOpen":
-                var components = URLComponents(string: apiOrigin + "/")!
-                components.queryItems = [URLQueryItem(name: "q", value: String((args["q"] as? String ?? "").prefix(120)))]
-                guard let url = components.url else { reply(id, false, "Liên kết Sites không hợp lệ."); return }
-                let safari = SFSafariViewController(url: url)
-                present(safari, animated: true)
             case "api":
-                guard let path = args["path"] as? String, path.count < 2000, path.range(of: "^/api/(catalog|reader|video-captions)\\?[^\\r\\n#]*$", options: .regularExpression) != nil, let url = URL(string: apiOrigin + path) else { reply(id, false, "Yêu cầu không hợp lệ."); return }
+                guard let path = args["path"] as? String, path.count < 2000, path.range(of: "^/api/(catalog|reader|video-captions|song-sheet)\\?[^\\r\\n#]*$", options: .regularExpression) != nil, let url = URL(string: apiOrigin + path) else { reply(id, false, "Yêu cầu không hợp lệ."); return }
                 var request = URLRequest(url: url); request.setValue("application/json", forHTTPHeaderField: "Accept"); request.setValue("GocHopAmIOS/1.2", forHTTPHeaderField: "User-Agent")
                 session.dataTask(with: request) { [weak self] data, response, error in
                     guard let self = self else { return }
-                    guard error == nil, let response = response as? HTTPURLResponse, response.statusCode == 200, response.mimeType?.contains("json") == true, let data = data, data.count <= 2_000_000, let json = try? JSONSerialization.jsonObject(with: data), json is [String: Any] else { self.reply(id, false, "Chưa tải được bài. Hãy kiểm tra mạng rồi thử lại."); return }
+                    guard error == nil, let response = response as? HTTPURLResponse, response.statusCode == 200, response.mimeType == "application/json", let data = data, data.count <= 2_000_000, let json = try? JSONSerialization.jsonObject(with: data), json is [String: Any] else { self.reply(id, false, "Chưa tải được bài. Hãy kiểm tra mạng rồi thử lại."); return }
                     self.reply(id, true, json)
                 }.resume()
                 return
@@ -244,7 +243,7 @@ final class MusicViewController: UIViewController, WKScriptMessageHandler, WKNav
             case "share":
                 guard let text = args["text"] as? String, text.count <= 800 else { reply(id, false, "Nội dung quá dài."); return }
                 let sharedURL = (args["url"] as? String).flatMap { URL(string: $0) }
-                let items: [Any] = sharedURL?.scheme == "https" && sharedURL?.host == "goc-hop-am.onwardcrust.chatgpt.site" ? [text, sharedURL!] : [text]
+                let items: [Any] = sharedURL?.scheme == "https" && sharedURL?.host == "gochopam.pages.dev" ? [text, sharedURL!] : [text]
                 let share = UIActivityViewController(activityItems: items, applicationActivities: nil)
                 share.popoverPresentationController?.sourceView = web
                 share.popoverPresentationController?.sourceRect = CGRect(x: web.bounds.midX, y: 20, width: 1, height: 1)

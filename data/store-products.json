@@ -1,0 +1,29 @@
+[
+  {
+    "id": "vip864",
+    "title": "Bảng hòa âm VIP · 864 sơ đồ",
+    "kind": "sale",
+    "pages": 27,
+    "bytes": 1433455,
+    "sha256": "f4e718d8cba0644bff3d8041d4c7440f034f4be7fcc56119f749a6f988ded857",
+    "cover": "/shop/vip864.jpg"
+  },
+  {
+    "id": "expanded1176",
+    "title": "Bảng hòa âm mở rộng · 1.176 sơ đồ",
+    "kind": "sale",
+    "pages": 27,
+    "bytes": 906484,
+    "sha256": "3ee9ae8911bc5a2af63670b736b9c6e916268b13ee3d739d104655f2536eb815",
+    "cover": "/shop/expanded1176.jpg"
+  },
+  {
+    "id": "bonus24",
+    "title": "Bảng hợp âm 24 tông đầy đủ dấu hóa",
+    "kind": "bonus",
+    "pages": 26,
+    "bytes": 3608371,
+    "sha256": "a5b8c4ba1217d7ba59c164d05197f451d9635c1cf8f961f7382f7a95bc2d71a8",
+    "cover": "/shop/vip864.jpg"
+  }
+]

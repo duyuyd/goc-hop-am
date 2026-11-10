@@ -43,11 +43,9 @@ import java.util.concurrent.TimeUnit;
 /** Bundled UI; only public, read-only music endpoints may cross the bridge. */
 public final class MainActivity extends Activity {
   private static final String LOCAL = "https://app.gochopam.local/";
-  private static final String API = "https://goc-hop-am.onwardcrust.chatgpt.site";
+  private static final String API = "https://gochopam.pages.dev";
   private WebView web;
   private WebView printWeb;
-  private android.app.Dialog siteDialog;
-  private WebView siteWeb;
   private String textRequest=null;
   private byte[] textOutput;
   private boolean printing=false;
@@ -101,7 +99,7 @@ public final class MainActivity extends Activity {
         if(!"https".equals(u.getScheme())||!"app.gochopam.local".equals(u.getHost()))return blocked();
         String path=u.getPath();
         String name="/".equals(path)?"index.html":path==null?"":path.substring(1);
-        if(!name.matches("index\\.html|bundle\\.js|app\\.css|icon\\.svg"))return blocked();
+        if(!name.matches("index\\.html|bundle\\.js|app\\.css|icon\\.svg|vendor/pdf-engine\\.js|vendor/PDFJS-LICENSE\\.txt"))return blocked();
         String mime=name.endsWith(".js")?"application/javascript":name.endsWith(".css")?"text/css":name.endsWith(".svg")?"image/svg+xml":"text/html";
         try{return new WebResourceResponse(mime,"UTF-8",200,"OK",Collections.singletonMap("Cache-Control","no-store"),getAssets().open(name));}catch(Exception e){return blocked();}
       }
@@ -140,7 +138,7 @@ public final class MainActivity extends Activity {
   void stopSpeech(){if(singing!=null)singing.stop();}
   boolean studioBusy(){return studio!=null&&studio.busy();}
   @Override public void onRequestPermissionsResult(int code,String[] names,int[] results){super.onRequestPermissionsResult(code,names,results);studio.permissions(code,names,results);singing.permissions(code,results);}
-  @Override protected void onActivityResult(int code,int result,Intent data){super.onActivityResult(code,result,data);if(code==501||code==502){final String requestId=textRequest;final byte[] output=textOutput;final boolean audio=readingAudio;readingAudio=false;textRequest=null;textOutput=null;if(requestId==null)return;if(result!=RESULT_OK||data==null||data.getData()==null){reply(requestId,true,"");return;}final Uri uri=data.getData();network.execute(()->{try{if(code==501){try(InputStream in=getContentResolver().openInputStream(uri)){if(audio)reply(requestId,true,new JSONObject().put("base64",android.util.Base64.encodeToString(read(in,3000000),android.util.Base64.NO_WRAP)));else reply(requestId,true,new String(read(in,250000),StandardCharsets.UTF_8));}}else{try(java.io.OutputStream out=getContentResolver().openOutputStream(uri)){if(out==null||output==null)throw new Exception();out.write(output);}reply(requestId,true,true);}}catch(Exception e){reply(requestId,false,"Chưa đọc hoặc lưu được tệp văn bản (tối đa 250 KB).");}});return;}studio.activityResult(code,result,data);}
+  @Override protected void onActivityResult(int code,int result,Intent data){super.onActivityResult(code,result,data);if(code==501||code==502){final String requestId=textRequest;final byte[] output=textOutput;final boolean audio=readingAudio;readingAudio=false;textRequest=null;textOutput=null;if(requestId==null)return;if(result!=RESULT_OK||data==null||data.getData()==null){reply(requestId,true,"");return;}final Uri uri=data.getData();network.execute(()->{try{if(code==501){try(InputStream in=getContentResolver().openInputStream(uri)){if(audio)reply(requestId,true,new JSONObject().put("base64",android.util.Base64.encodeToString(read(in,3000000),android.util.Base64.NO_WRAP)));else reply(requestId,true,new String(read(in,250000),StandardCharsets.UTF_8));}}else{try(java.io.OutputStream out=getContentResolver().openOutputStream(uri)){if(out==null||output==null)throw new Exception();out.write(output);}reply(requestId,true,true);}}catch(Exception e){reply(requestId,false,audio?"Chưa đọc được tệp nhạc (tối đa 3 MB).":"Chưa đọc hoặc lưu được tệp văn bản (tối đa 250 KB).");}});return;}studio.activityResult(code,result,data);}
   @SuppressWarnings("deprecation") @Override public void onBackPressed(){back();}
   void reply(String id,boolean ok,Object value){
     final String encoded=value==null?"null":value instanceof JSONObject?value.toString():value instanceof Boolean?value.toString():JSONObject.quote(String.valueOf(value));
@@ -152,46 +150,16 @@ public final class MainActivity extends Activity {
     }
   }
   private JSONObject api(String path)throws Exception{
-    if(path.length()>2000||!path.matches("/api/(catalog|reader|video-captions)\\?[^\\r\\n#]*"))throw new Exception("Yêu cầu không hợp lệ.");
-    HttpURLConnection c=null;
+    if(path.length()>2000||!path.matches("/api/(catalog|reader|video-captions|song-sheet)\\?[^\\r\\n#]*"))throw new Exception("Yêu cầu không hợp lệ.");
+    HttpURLConnection c=(HttpURLConnection)new URL(API+path).openConnection();
+    c.setConnectTimeout(10000);c.setReadTimeout(20000);c.setInstanceFollowRedirects(false);
+    c.setRequestProperty("Accept","application/json");c.setRequestProperty("User-Agent","GocHopAmAndroid/1.2");
     try{
-      c=(HttpURLConnection)new URL(API+path).openConnection();
-      c.setConnectTimeout(8000);c.setReadTimeout(15000);c.setInstanceFollowRedirects(false);
-      c.setRequestProperty("Accept","application/json");
-      c.setRequestProperty("User-Agent","GocHopAmAndroid/1.3.1");
-      int code=c.getResponseCode();
-      if(code!=200)throw new Exception("Sites trả HTTP "+code+" cho kho bài.");
-      String type=c.getContentType();
-      if(type==null||!type.toLowerCase(java.util.Locale.ROOT).contains("json"))throw new Exception("Sites chưa trả JSON của kho bài.");
+      int status=c.getResponseCode();
+      if(status!=200)throw new Exception(status==429?"Kho bài đang giới hạn truy cập. Hãy thử lại sau.":"Chưa tải được bài. Hãy kiểm tra kết nối rồi thử lại.");
+      String contentType=c.getContentType();if(contentType==null||!contentType.contains("application/json"))throw new Exception("Kho bài chưa trả dữ liệu hợp lệ.");
       return new JSONObject(new String(read(c.getInputStream(),2000000),StandardCharsets.UTF_8));
-    }finally{if(c!=null)c.disconnect();}
-  }
-  private void showSite(String query){
-    if(siteDialog!=null)siteDialog.dismiss();
-    android.app.Dialog dialog=new android.app.Dialog(this);
-    LinearLayout panel=new LinearLayout(this);panel.setOrientation(LinearLayout.VERTICAL);
-    panel.setBackgroundColor(Color.rgb(33,25,46));
-    Button close=new Button(this);close.setText("← Đóng kho bài Sites");
-    panel.addView(close,new LinearLayout.LayoutParams(-1,dp(52)));
-    WebView browser=new WebView(this);browser.setBackgroundColor(Color.WHITE);
-    WebSettings settings=browser.getSettings();settings.setJavaScriptEnabled(true);settings.setDomStorageEnabled(true);
-    settings.setAllowFileAccess(false);settings.setAllowContentAccess(false);
-    settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
-    browser.setWebViewClient(new WebViewClient(){
-      @Override public boolean shouldOverrideUrlLoading(WebView view,WebResourceRequest request){
-        Uri url=request.getUrl();
-        if("https".equals(url.getScheme())&&"goc-hop-am.onwardcrust.chatgpt.site".equals(url.getHost()))return false;
-        if("https".equals(url.getScheme()))startActivity(new Intent(Intent.ACTION_VIEW,url));
-        return true;
-      }
-    });
-    panel.addView(browser,new LinearLayout.LayoutParams(-1,0,1));
-    dialog.setContentView(panel);siteWeb=browser;siteDialog=dialog;
-    close.setOnClickListener(v->dialog.dismiss());
-    dialog.setOnDismissListener(d->{browser.stopLoading();browser.destroy();if(siteWeb==browser)siteWeb=null;if(siteDialog==dialog)siteDialog=null;});
-    dialog.show();if(dialog.getWindow()!=null)dialog.getWindow().setLayout(-1,-1);
-    String safe=query==null?"":query.substring(0,Math.min(120,query.length()));
-    browser.loadUrl(API+"/?q="+Uri.encode(safe));
+    }finally{c.disconnect();}
   }
   private synchronized String loadLibrary()throws Exception{
     AtomicFile file=new AtomicFile(new File(getFilesDir(),"offline-v1.json"));
@@ -227,9 +195,9 @@ public final class MainActivity extends Activity {
           switch(action){
             case "videoLayout":videoExtent=Math.max(200,Math.min(420,args.optInt("size",200)));arrange();break;
             case "sheetSource":String source=args.optString("source"),target=source.equals("musescore")?"https://musescore.com/sheetmusic":source.equals("imslp")?"https://imslp.org/":source.equals("musopen")?"https://musopen.org/sheetmusic/":null;if(target==null)throw new Exception();startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(target)));break;
-            case "readAudio":if(textRequest!=null)throw new Exception();textRequest=requestId;readingAudio=true;Intent pickAudio=new Intent(Intent.ACTION_OPEN_DOCUMENT);pickAudio.setType("audio/*");pickAudio.addCategory(Intent.CATEGORY_OPENABLE);try{startActivityForResult(pickAudio,501);}catch(Exception e){textRequest=null;readingAudio=false;throw e;}return;
+            case "readAudio":if(textRequest!=null)throw new Exception();textRequest=requestId;readingAudio=true;Intent pickAudio=new Intent(Intent.ACTION_OPEN_DOCUMENT);pickAudio.setType("audio".equals(args.optString("kind","audio"))?"audio/*":"*/*");pickAudio.addCategory(Intent.CATEGORY_OPENABLE);try{startActivityForResult(pickAudio,501);}catch(Exception e){textRequest=null;readingAudio=false;throw e;}return;
             case "readText":if(textRequest!=null)throw new Exception();textRequest=requestId;Intent pickText=new Intent(Intent.ACTION_OPEN_DOCUMENT);pickText.setType("*/*");pickText.addCategory(Intent.CATEGORY_OPENABLE);try{startActivityForResult(pickText,501);}catch(Exception e){textRequest=null;throw e;}return;
-            case "saveText":if(textRequest!=null)throw new Exception();String fileText=args.getString("text"),fileName=args.optString("name","Goc_Hop_Am_Sheet.json");if(fileText.getBytes(StandardCharsets.UTF_8).length>250000||!fileName.matches("[A-Za-z0-9_-]{1,80}\\.(?:json|musicxml)"))throw new Exception();textRequest=requestId;textOutput=fileText.getBytes(StandardCharsets.UTF_8);Intent saveText=new Intent(Intent.ACTION_CREATE_DOCUMENT);saveText.setType(fileName.endsWith(".musicxml")?"application/vnd.recordare.musicxml+xml":"application/json");saveText.addCategory(Intent.CATEGORY_OPENABLE);saveText.putExtra(Intent.EXTRA_TITLE,fileName);try{startActivityForResult(saveText,502);}catch(Exception e){textRequest=null;textOutput=null;throw e;}return;
+            case "saveText":if(textRequest!=null)throw new Exception();String fileText=args.getString("text"),fileName=args.optString("name","Goc_Hop_Am_Sheet.json");if(fileText.getBytes(StandardCharsets.UTF_8).length>1500000||!fileName.matches("[A-Za-z0-9_-]{1,80}\\.(json|musicxml)"))throw new Exception();textRequest=requestId;textOutput=fileText.getBytes(StandardCharsets.UTF_8);Intent saveText=new Intent(Intent.ACTION_CREATE_DOCUMENT);saveText.setType(fileName.endsWith(".musicxml")?"application/vnd.recordare.musicxml+xml":"application/json");saveText.addCategory(Intent.CATEGORY_OPENABLE);saveText.putExtra(Intent.EXTRA_TITLE,fileName);try{startActivityForResult(saveText,502);}catch(Exception e){textRequest=null;textOutput=null;throw e;}return;
             case "printSheet":String html=args.getString("html");if(html.length()>500000)throw new Exception();if(printWeb!=null)printWeb.destroy();printing=true;printWeb=new WebView(MainActivity.this);printWeb.getSettings().setAllowFileAccess(false);printWeb.getSettings().setAllowContentAccess(false);printWeb.setWebViewClient(new WebViewClient(){@Override public boolean shouldOverrideUrlLoading(WebView view,WebResourceRequest request){return true;}@Override public void onPageFinished(WebView view,String url){android.print.PrintManager manager=(android.print.PrintManager)getSystemService(PRINT_SERVICE);manager.print("Góc Hợp Âm - Sheet",view.createPrintDocumentAdapter("Goc_Hop_Am_Sheet"),new android.print.PrintAttributes.Builder().setMediaSize(android.print.PrintAttributes.MediaSize.ISO_A4).build());}});printWeb.loadDataWithBaseURL(LOCAL,html,"text/html","UTF-8",null);break;
             case "recordPermission":case "recordScreenStart":case "recordStart":studio.start(requestId,action,args);return;
             case "recordStop":studio.stop(requestId);return;
@@ -239,11 +207,12 @@ public final class MainActivity extends Activity {
             case "speechStop":singing.stop();break;
             case "video":showVideo(args.getString("id"));break;
             case "videoClose":closeVideo(false);break;
+            case "sheetExternal":String sheetPath=args.optString("path");if(!sheetPath.startsWith("/api/song-sheet?")||sheetPath.length()>2000||sheetPath.contains("#")||sheetPath.contains("\r")||sheetPath.contains("\n"))throw new Exception();startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(API+sheetPath)));break;
+            case "videoPause":if(videoWeb!=null)videoWeb.evaluateJavascript("window.GocPause && window.GocPause()",null);break;
             case "videoExternal":String videoId=args.optString("id","");if(!videoId.matches("[A-Za-z0-9_-]{11}"))throw new Exception("Video không hợp lệ.");closeVideo(true);startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("https://www.youtube.com/watch?v="+videoId)));break;
             case "awake":if(args.optBoolean("enabled"))getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);break;
             case "metronome":if(args.optBoolean("running")){int bpm=Math.max(40,Math.min(240,args.optInt("bpm",80))),beats=args.optInt("beats",4);if(beats!=2&&beats!=3&&beats!=4&&beats!=6)beats=4;startMetro(bpm,beats);}else stopMetro();break;
-            case "share":String text=args.optString("text","");String sharedUrl=args.optString("url","");if(!sharedUrl.isEmpty()){Uri link=Uri.parse(sharedUrl);if(!"https".equals(link.getScheme())||!"goc-hop-am.onwardcrust.chatgpt.site".equals(link.getHost())||!"/".equals(link.getPath()))throw new Exception("Liên kết không hợp lệ.");text+="\n"+sharedUrl;}if(text.length()>2000)throw new Exception("Nội dung quá dài.");Intent send=new Intent(Intent.ACTION_SEND);send.setType("text/plain");send.putExtra(Intent.EXTRA_TEXT,text);startActivity(Intent.createChooser(send,"Chia sẻ bài hát"));break;
-            case "siteOpen":showSite(args.optString("q",""));break;
+            case "share":String text=args.optString("text","");String sharedUrl=args.optString("url","");if(!sharedUrl.isEmpty()){Uri link=Uri.parse(sharedUrl);if(!"https".equals(link.getScheme())||!"gochopam.pages.dev".equals(link.getHost())||!"/".equals(link.getPath()))throw new Exception("Liên kết không hợp lệ.");text+="\n"+sharedUrl;}if(text.length()>2000)throw new Exception("Nội dung quá dài.");Intent send=new Intent(Intent.ACTION_SEND);send.setType("text/plain");send.putExtra(Intent.EXTRA_TEXT,text);startActivity(Intent.createChooser(send,"Chia sẻ bài hát"));break;
             case "github":startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("https://github.com/duyuyd/goc-hop-am")));break;
             case "help":startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(API+"/huong-dan")));break;
             default:throw new Exception("Thao tác không được hỗ trợ.");
@@ -254,5 +223,5 @@ public final class MainActivity extends Activity {
   }
   @Override public void onPause(){super.onPause();studio.onPause();if(studio.pending()||singing.pending()||textRequest!=null||printing){return;}stopSpeech();closeVideo(true);stopMetro();getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);web.evaluateJavascript("window.dispatchEvent(new Event('nativePause'))",null);web.onPause();}
   @Override public void onResume(){super.onResume();printing=false;if(web!=null)web.onResume();}
-  @Override public void onDestroy(){if(siteDialog!=null)siteDialog.dismiss();studio.onPause();destroyed=true;stopSpeech();closeVideo(false);stopMetro();clock.shutdownNow();network.shutdownNow();if(tone!=null){tone.release();tone=null;}if(printWeb!=null)printWeb.destroy();web.removeJavascriptInterface("GocAndroid");web.destroy();super.onDestroy();}
+  @Override public void onDestroy(){studio.onPause();destroyed=true;stopSpeech();closeVideo(false);stopMetro();clock.shutdownNow();network.shutdownNow();if(tone!=null){tone.release();tone=null;}if(printWeb!=null)printWeb.destroy();web.removeJavascriptInterface("GocAndroid");web.destroy();super.onDestroy();}
 }

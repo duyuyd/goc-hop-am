@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#101c2c">
+  <meta name="description" content="Tìm bản phổ PDF và ảnh bản nhạc có nguồn rõ ràng trên Góc Hợp Âm.">
+  <title>Kho bản phổ · Góc Hợp Âm</title>
+  <link rel="icon" href="/favicon.svg">
+  <link rel="stylesheet" href="/music-tools.css?v=143">
+  <link rel="stylesheet" href="/ban-pho/library.css">
+</head>
+<body>
+  <header class="masthead">
+    <a class="brand" href="/">Góc Hợp Âm</a>
+    <a class="return" href="/?mode=sheets">Bản phổ theo bài hát</a>
+  </header>
+  <main>
+    <section class="intro" aria-labelledby="title">
+      <span class="eyebrow">GÓC HỢP ÂM · THƯ VIỆN</span>
+      <h1 id="title">Kho bản phổ mở</h1>
+      <p>Tìm và đọc bản phổ có sẵn từ Mutopia Project và Wikimedia Commons ngay trên Góc Hợp Âm.</p>
+      <div class="controls">
+        <label>Tìm bản phổ
+          <input id="search" type="search" placeholder="Tên bản nhạc, tác giả, nhạc cụ…" maxlength="120" autocomplete="off">
+        </label>
+        <label>Danh mục
+          <select id="collection">
+            <option value="">Tất cả nguồn</option>
+            <option value="commons">Bản tiếng Việt</option>
+            <option value="mutopia">Mutopia Project</option>
+          </select>
+        </label>
+      </div>
+    </section>
+    <section class="results" aria-labelledby="results-title">
+      <div class="list-head">
+        <h2 id="results-title">Danh sách bản phổ</h2>
+        <p id="count" role="status" aria-live="polite">Đang tải danh mục…</p>
+      </div>
+      <ul id="scores" aria-label="Bản phổ"></ul>
+      <nav id="pagination" aria-label="Trang kết quả" hidden>
+        <button id="previous" type="button">← Trang trước</button>
+        <span id="page"></span>
+        <button id="next" type="button">Trang sau →</button>
+      </nav>
+    </section>
+  </main>
+  <dialog id="viewer" aria-labelledby="score-title">
+    <div class="viewer-head">
+      <div>
+        <h2 id="score-title"></h2>
+        <p id="score-credit"></p>
+      </div>
+      <form method="dialog"><button aria-label="Đóng bản phổ">Đóng</button></form>
+    </div>
+    <div class="viewer-links">
+      <a id="score-source" target="_blank" rel="noopener noreferrer">Trang nguồn</a>
+      <a id="score-license" target="_blank" rel="noopener noreferrer" hidden>Giấy phép</a>
+      <a id="score-image-file" target="_blank" rel="noopener" hidden>Mở ảnh gốc</a>
+      <a id="score-archive" target="_blank" rel="noopener noreferrer" hidden>Tải ZIP bản phổ</a>
+    </div>
+    <div id="score-pdf"></div>
+    <img id="score-image" alt="" hidden>
+  </dialog>
+  <script type="module" src="/ban-pho/library.js"></script>
+</body>
+</html>

@@ -1,17 +1,13 @@
 Người phát triển: **NPT Duy**.
 
-Bản thử nghiệm 1.3.0:
+Bản thử nghiệm 1.4.0:
 
-- Sửa tìm và đọc phụ đề YouTube; hỗ trợ JSON3/XML và nhập LRC/SRT/VTT, chỉnh lệch mốc. Báo đúng dữ liệu rỗng, nguồn chưa truy cập được hoặc không tìm thấy phụ đề. Không hứa lấy được phụ đề cho mọi video.
-- Kéo chỉnh khung YouTube để chừa chỗ cho lời; giữ nguyên các tính năng ghi âm, camera và quay màn hình đang hoạt động.
-- Tra 144 hợp âm có phát thử, piano tương tác và phím sáng theo sheet.
-- Soạn sheet một bè 4/4, sửa nốt, phát lại, in/lưu PDF, nhập/xuất JSON.
-- Nhận giai điệu từ tệp hát/đàn một bè dưới 3 MB trên thiết bị: tối đa 60 giây và 128 nốt mỗi lần. Kết quả là sheet nháp cần nghe và chỉnh. Bản phối nhiều nhạc cụ có thể nhận sai. Không tải âm thanh lên máy chủ.
-- Ghi chú và nhật ký luyện tập; mở các thư viện MuseScore/IMSLP/Musopen. Chưa gom toàn bộ kho sheet bên ngoài.
-- Website hỗ trợ thêm ra màn hình chính và mở các công cụ đã tải khi mất mạng.
+- Mở bản phổ PDF thật ngay trong bài, giữ nguyên nốt, nhịp và dấu nghỉ; không dùng nốt đệm suy đoán làm sheet gốc.
+- Kho bản phổ riêng có phân trang; tự tìm theo mã bài. Bài thiếu nguồn hoặc nguồn không truy cập được báo rõ, chưa công bố đủ sheet cho 50.000 bài.
+- Bộ đọc PDF cục bộ: chọn bản, chuyển trang, phóng to, mở PDF để in/lưu. Giao diện riêng xanh mực / cam san hô, đầu trang gọn hơn.
+- Theo lời tô sáng các dòng lời bên dưới video: sửa dòng đầu tiên, cập nhật khi tua hoặc chuyển tông. Video bị chặn đọc phụ đề vẫn cần mốc lời hợp lệ.
+- Không gọi API AI trả phí. Giữ nguyên phần ghi âm, quay màn hình và camera đang hoạt động.
 
-APK Android versionCode 5 giữ gói và chữ ký thử nghiệm để cài cập nhật. Tải tại https://gochopam.pages.dev/ung-dung/ . Chưa phát hành CH Play.
+Android APK versionCode 6 giữ chữ ký để cài cập nhật. Chưa phát hành CH Play. iOS cần GitHub Actions biên dịch và ký trước khi cài; iPhone có thể thêm ứng dụng web ra màn hình chính.
 
-Bản iOS Simulator và IPA chưa ký được GitHub Actions biên dịch từ commit này nếu các kiểm tra thành công. IPA chưa ký chưa cài trực tiếp lên iPhone và chưa phải bản App Store. Có thể dùng ứng dụng web trên iPhone.
-
-Mã nguồn không chứa khóa ký, tài khoản hay bản ghi riêng của người dùng. Nội dung bài hát, video và phụ thuộc giữ thông tin tác giả tương ứng.
+Bộ đọc dùng PDF.js theo Apache-2.0. Tác giả và người chép bản phổ được giữ nguyên trong PDF; NPT Duy là người phát triển ứng dụng.

@@ -1,7 +1,28 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {musicChord,cleanScore,scoreSvg} from '../public/mobile/music-tools.js';
+import {musicChord,cleanScore,scoreSvg,scoreMusicXml} from '../public/mobile/music-tools.js';
 import {detectMusicPitch,scoreFromPitches,transcribeMusicAudio} from '../public/mobile/pitch.js';
+
+test('MusicXML preserves edited notes, rests and provenance without filling missing music', () => {
+ const notes=[{midi:61,beats:1},{midi:null,beats:.5},{midi:72,beats:.5},{midi:55,beats:2},{midi:null,beats:1}];
+ const draft=cleanScore({title:'Điệu & <nháp>\u0000',author:'Nhạc sĩ',bpm:96,origin:'audio-draft',notes});
+ assert.equal(draft.origin,'audio-draft');
+ assert.deepEqual(cleanScore(JSON.parse(JSON.stringify(draft))),draft);
+ const xml=scoreMusicXml(draft);
+ assert.match(xml,/<work-title>Điệu &amp; &lt;nháp&gt;<\/work-title>/);
+ assert.match(xml,/<creator type="composer">Nhạc sĩ<\/creator>/);
+ assert.match(xml,/<divisions>2<\/divisions>/);
+ assert.match(xml,/<sound tempo="96"\/>/);
+ assert.match(xml,/<step>C<\/step><alter>1<\/alter><octave>4<\/octave><\/pitch><duration>2<\/duration><type>quarter<\/type>/);
+ assert.match(xml,/<rest\/><duration>1<\/duration><type>eighth<\/type>/);
+ assert.match(xml,/<measure number="2" implicit="yes"><note><rest\/><duration>2<\/duration>/);
+ assert.equal((xml.match(/<note>/g)||[]).length,notes.length);
+ assert.doesNotMatch(xml,/<(?:lyric|harmony)>|\u0000/);
+ assert.match(xml,/Bản nháp nhận dạng âm thanh/);
+ assert.match(scoreSvg(draft),/Cần đối chiếu/);
+ assert.ok(!('origin' in cleanScore({title:'Bản soạn cũ',notes})));
+ assert.throws(()=>scoreMusicXml({notes:[]}),/Thêm nốt/);
+});
 test('chord notes and score rendering preserve pitch, rhythm and escaped user titles',()=>{
  assert.deepEqual(musicChord('C','maj7'),[60,64,67,71]);assert.deepEqual(musicChord('A','m'),[69,72,76]);assert.deepEqual(musicChord('bad',''),[]);
  const value=cleanScore({title:'<script>bad</script>',author:'NPT Duy',notes:[{midi:60,beats:1},{midi:63,beats:1},{midi:null,beats:2}]});
@@ -20,4 +41,18 @@ test('full audio pipeline produces an editable melody without fabricated silent 
  const result=await transcribeMusicAudio({sampleRate:rate,duration:2,numberOfChannels:1,getChannelData:()=>data},{bpm:60});
  assert.ok(result.notes.some(n=>n.midi===60));assert.ok(result.notes.some(n=>n.midi===64));assert.doesNotThrow(()=>cleanScore({notes:result.notes}));
  await assert.rejects(()=>transcribeMusicAudio({sampleRate:rate,duration:1,numberOfChannels:1,getChannelData:()=>new Float32Array(rate)}),/Chưa nhận/);
+});
+
+test('existing audio recognition preserves the two known pitches at non-native sample rates',async()=>{
+ for(const sampleRate of [8000,44100,48000,96000]){
+  const samples=Float32Array.from({length:sampleRate*2},(_,i)=>{
+   const seconds=i/sampleRate;
+   if(seconds>=.75&&seconds<1.25)return 0;
+   const frequency=seconds<.75?440:523.251;
+   return .22*Math.sin(2*Math.PI*frequency*seconds);
+  });
+  const {notes}=await transcribeMusicAudio({sampleRate,duration:2,numberOfChannels:1,getChannelData:()=>samples},{bpm:60});
+  const pitches=[...new Set(notes.map(n=>n.midi))];
+  assert.deepEqual(pitches,[69,null,72],`sample rate ${sampleRate}`);
+ }
 });

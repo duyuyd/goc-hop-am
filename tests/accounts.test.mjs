@@ -1,0 +1,27 @@
+import assert from 'node:assert/strict';
+import { DatabaseSync } from 'node:sqlite';
+import { registerHooks } from 'node:module';
+import { readFileSync } from 'node:fs';
+import ts from 'typescript';
+import {hashPassword} from '../lib/passwords.mjs';
+const {testRuntime}=await import('./helpers/runtime.mjs');
+const {sql}=testRuntime({ADMIN_USERNAME:'admin',ADMIN_PASSWORD_HASH:await hashPassword('Test-only-admin-567890')});
+const a=await import('../lib/accounts.ts');
+function req(data,cookie='',origin='https://app.test'){return new Request('https://app.test/api/auth',{method:'POST',headers:{'Content-Type':'application/json',Origin:origin,...(cookie?{Cookie:cookie}:{})},body:JSON.stringify(data)})}
+const memberResponse=await a.authAction(req({action:'register',username:'qa_member',name:'Thành viên kiểm thử',password:'Test-only-member-12345',role:'admin'}));
+assert.equal(memberResponse.status,200);const member=(await memberResponse.json()).user;assert.equal(member.role,'member');assert.ok(!('password_hash' in member));const memberCookie=memberResponse.headers.get('set-cookie').split(';')[0];assert.match(memberResponse.headers.get('set-cookie'),/HttpOnly.*SameSite=Lax.*Secure/);
+assert.equal((await a.getAccount(new Request('https://app.test',{headers:{Cookie:memberCookie}}))).username,'qa_member');
+await assert.rejects(()=>a.adminGet(new Request('https://app.test',{headers:{Cookie:memberCookie}})),e=>e.status===403);
+await assert.rejects(()=>a.adminGet(new Request('https://app.test')),e=>e.status===401);
+await assert.rejects(()=>a.authAction(req({action:'register',username:'xcsrf',name:'x',password:'Test-only-12345'},'','https://evil.test')),e=>e.status===403);
+await assert.rejects(()=>a.authAction(req({action:'register',username:'admin',name:'x',password:'Test-only-12345'})),e=>e.status===409);
+const adminResponse=await a.authAction(req({action:'login',username:'admin',password:'Test-only-admin-567890'})),adminCookie=adminResponse.headers.get('set-cookie').split(';')[0];assert.equal((await adminResponse.json()).user.role,'admin');
+const adminRequest=new Request('https://app.test/api/admin',{headers:{Cookie:adminCookie}});assert.equal((await (await a.adminGet(adminRequest)).json()).stats.members,2);
+await a.adminAction(req({action:'settings',title:'Tên trang thử nghiệm',tagline:'Lưu đúng dữ liệu'},adminCookie));assert.equal((await a.settings()).title,'Tên trang thử nghiệm');
+await a.adminAction(req({action:'song',title:'Bài kiểm thử',content:'[C]Một câu do người thử viết.',key:'C',published:true},adminCookie));assert.equal(sql.prepare('SELECT COUNT(*) as n FROM community_songs').get().n,1);
+await a.authAction(req({action:'password',password:'Test-only-admin-567890',newPassword:'New-test-password-456789'},adminCookie));
+await assert.rejects(()=>a.authAction(req({action:'login',username:'admin',password:'Test-only-admin-567890'})),e=>e.status===401);
+const newAdmin=await a.authAction(req({action:'login',username:'admin',password:'New-test-password-456789'}));assert.equal(newAdmin.status,200);
+await a.authAction(req({action:'logout'},memberCookie));assert.equal(await a.getAccount(new Request('https://app.test',{headers:{Cookie:memberCookie}})),null);
+assert.ok(!JSON.stringify(sql.prepare('SELECT * FROM account_sessions').all()).includes('goc_session='));
+console.log('Passed: real SQLite registration/login/logout, role escalation blocked, admin guards, CSRF, secure cookies, durable settings/song writes, password rotation and bootstrap password invalidation.');

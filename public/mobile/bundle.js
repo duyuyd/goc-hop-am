@@ -7,15 +7,42 @@ function transpose(chord,shift=0){
  const aliases={Db:1,Eb:3,Gb:6,Ab:8,Bb:10,Cb:11,Fb:4,'E#':5,'B#':0};
  return String(chord).replace(/(^|\/)([A-G][#b]?)/g,(_,prefix,note)=>prefix+(note.includes('b')?flats:sharps)[(((aliases[note]??sharps.indexOf(note))+shift)%12+12)%12]);
 }
-function songUrl(value){
- const text=String(value||'').trim();if(/^site:[A-Za-z0-9._~-]{1,180}$/.test(text))return text;
- try{
-  const u=new URL(text);if(u.protocol!=='https:'||u.username||u.password||u.port||text.length>2048)return null;
-  if(u.origin==='https://hopamviet.vn'&&/^\/chord\/song\/[a-z0-9-]+\/[A-Za-z0-9]+\.html$/.test(u.pathname))return u.origin+u.pathname;
-  if(u.origin==='https://goc-hop-am.onwardcrust.chatgpt.site'&&u.pathname!=='/'&&!/^\/(?:api|admin|login|dang-nhap)(?:\/|$)/i.test(u.pathname))return u.origin+u.pathname+u.search;
- }catch{}return null;
-}
+const communityPrefix='goc-song:';
+function communitySongRef(id){return typeof id==='string'&&/^[A-Za-z0-9_-]{1,80}$/.test(id)?communityPrefix+id:null}
+function communitySongId(value){return typeof value==='string'&&value.startsWith(communityPrefix)&&communitySongRef(value.slice(communityPrefix.length))===value?value.slice(communityPrefix.length):null}
+function songUrl(value){if(communitySongId(value))return value;try{const u=new URL(value);return u.origin==='https://hopamviet.vn'&&!u.username&&!u.password&&/^\/chord\/song\/[a-z0-9-]+\/[A-Za-z0-9]+\.html$/.test(u.pathname)?u.origin+u.pathname:null}catch{return null}}
+function songReferenceId(value){const ref=songUrl(value),id=communitySongId(ref);return ref&&(id?'goc-'+id:ref.split('/').at(-1).slice(0,-5))}
+function songReaderPath(value){const ref=songUrl(value);if(!ref)return null;const id=communitySongId(ref);return '/api/reader?'+new URLSearchParams(id?{id}:{url:ref})}
 function validSong(s){return !!s&&typeof s.title==='string'&&s.title.length>0&&s.title.length<400&&typeof s.content==='string'&&s.content.length>0&&s.content.length<=80000&&!!songUrl(s.sourceUrl)}
+
+function songSearchKey(value){return String(value??'').normalize('NFD').replace(/\p{M}/gu,'').replace(/[đĐ]/g,'d').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim()}
+
+function oneSongEdit(a,b){
+ const shorterLength=Math.min(a.length,b.length),longerLength=Math.max(a.length,b.length);
+ if(shorterLength<3||longerLength<4||longerLength-shorterLength>1)return false;
+ let i=0;while(i<shorterLength&&a[i]===b[i])i++;
+ if(a.length!==b.length){const [shorter,longer]=a.length<b.length?[a,b]:[b,a];return shorter.slice(i)===longer.slice(i+1)}
+ return a.slice(i+1)===b.slice(i+1)||(a[i]===b[i+1]&&a[i+1]===b[i]&&a.slice(i+2)===b.slice(i+2));
+}
+
+function songTextRank(query,value){
+ if(!query||!value)return 0;
+ if(value===query)return 1;
+ if((' '+value+' ').includes(' '+query+' '))return 2;
+ const tokens=query.split(' '),words=value.split(' ');
+ for(let start=0;start+tokens.length<=words.length;start++){
+  let edits=0,i=0;
+  for(;i<tokens.length;i++){
+   if(tokens[i]===words[start+i])continue;
+   if(edits||!oneSongEdit(tokens[i],words[start+i]))break;
+   edits++;
+  }
+  if(i===tokens.length)return 3;
+ }
+ return 0;
+}
+
+const songSearchField=type=>type==='singer'?'singer':type==='composer'?'author':'title';
 function videoId(value=''){
  const text=String(value).trim();if(/^[A-Za-z0-9_-]{11}$/.test(text))return text;if(text.length>2048)return null;
  try{const u=new URL(text);if(!['https:','http:'].includes(u.protocol)||u.username||u.password||u.port)return null;let id;
@@ -31,28 +58,54 @@ function videoList(song={}){
  }return result;
 }
 function videoEmbed(value,origin){const id=videoId(value);if(!id)return null;const u=new URL('https://www.youtube-nocookie.com/embed/'+id);u.search=new URLSearchParams({playsinline:'1',controls:'1',rel:'0',autoplay:'0',fs:'0',origin:new URL(origin).origin}).toString();return u.href;}
+const offlineSongStorageKey='goc-mobile-offline';
+const offlineSongLimit=100;
 function offlineLibrary(value){
  const result=Object.create(null);if(!value||typeof value!=='object'||Array.isArray(value))return result;
- for(const item of Object.values(value).slice(0,100))if(validSong(item)){const url=songUrl(item.sourceUrl);result[url]={title:item.title,author:String(item.author||'').slice(0,400),key:/^[A-G][#b]?m?$/.test(item.key)?item.key:'C',content:item.content,sourceUrl:url,videos:videoList(item),savedAt:Number(item.savedAt)||0};}
+ for(const item of Object.values(value).slice(0,offlineSongLimit))if(validSong(item)){
+  const url=songUrl(item.sourceUrl);
+  result[url]={title:item.title,author:String(item.author||'').slice(0,400),key:/^[A-G][#b]?m?$/.test(item.key)?item.key:'C',content:item.content,sourceUrl:url,videos:videoList(item),savedAt:Number(item.savedAt)||0};
+  if(item.singer)result[url].singer=String(item.singer).slice(0,400);
+  if(item.rhythm)result[url].rhythm=String(item.rhythm).slice(0,80);
+ }
  return result;
 }
-function catalogItems(data){
- const records=[data?.items,data?.songs,data?.results,data?.data?.items,data?.data?.songs,data?.data?.results,Array.isArray(data?.data)?data.data:null].find(Array.isArray)||[];
- return records.slice(0,100).map(item=>{
-  if(!item||typeof item!=='object')return null;
-  const title=String(item.title||item.name||item.tenBaiHat||'').trim();
-  const raw=item.sourceUrl||item.url||item.href||item.link,id=item.id??item.songId??item.slug;
-  const ref=songUrl(raw)||(id!==undefined&&id!==null&&/^[A-Za-z0-9._~-]{1,180}$/.test(String(id))?'site:'+id:null);
-  if(!title||title.length>399||!ref)return null;
-  return {...item,title,author:String(item.author||item.composer||item.artist||item.singer||''),url:ref,sourceUrl:ref};
- }).filter(Boolean);
+
+function parseOfflineSongs(raw){
+ const value=JSON.parse(raw??'{}');
+ if(!value||typeof value!=='object'||Array.isArray(value))throw new Error('Chưa đọc được thư viện ngoại tuyến.');
+ return offlineLibrary(value);
 }
-function readerSong(data){
- const item=data?.song||data?.data?.song||data?.data||data;
- if(!item||typeof item!=='object')return null;
- const ref=songUrl(item.sourceUrl||item.url)||(item.id!==undefined&&/^[A-Za-z0-9._~-]{1,180}$/.test(String(item.id))?'site:'+item.id:null);
- return {...item,sourceUrl:ref,content:item.content||item.lyrics||''};
+
+function toggleOfflineSong(library,song,now=Date.now()){
+ if(!validSong(song))throw new Error('Bài này chưa tải đủ lời và hợp âm.');
+ const url=songUrl(song.sourceUrl),next={...library};
+ if(next[url])delete next[url];
+ else{
+  if(Object.keys(next).length>=offlineSongLimit)throw new Error('Đã đủ '+offlineSongLimit+' bài. Bỏ lưu một bài để thêm bài mới.');
+  next[url]={...song,savedAt:now};
+ }
+ const clean=offlineLibrary(next);
+ if(libraryBytes(clean)>2000000)throw new Error('Thư viện đã đầy. Hãy bỏ lưu một số bài.');
+ return clean;
 }
+
+function updateWebOfflineSong(song,storage,locks){
+ const update=()=>{
+  const next=toggleOfflineSong(parseOfflineSongs(storage.getItem(offlineSongStorageKey)),song);
+  storage.setItem(offlineSongStorageKey,JSON.stringify(next));
+  return next;
+ };
+ return locks?locks.request(offlineSongStorageKey,update):update();
+}
+
+function findOfflineSongs(library,{q='',type='title'}={}){
+ const query=songSearchKey(q),field=songSearchField(type);
+ if(q.trim()&&!query)return [];
+ return Object.values(library??{}).map(song=>({song,rank:query?songTextRank(query,songSearchKey(song[field])):1}))
+  .filter(match=>match.rank).sort((a,b)=>a.rank-b.rank||b.song.savedAt-a.song.savedAt||a.song.title.localeCompare(b.song.title,'vi')).map(match=>match.song);
+}
+function catalogItems(data){return (Array.isArray(data?.items)?data.items:[]).filter(s=>s&&typeof s.title==='string'&&songUrl(s.url)).slice(0,100)}
 function libraryBytes(library){return new TextEncoder().encode(JSON.stringify(library)).length}
 function bpmValue(value){return Math.max(40,Math.min(240,Math.round(Number(value)||80)))}
 
@@ -105,28 +158,28 @@ function captionTimeline(lines,cues){
  }
  return cleanTimeline(result,lines.length);
 }
-function createFollow({call,native,toast,getSong,getVideo,onHighlight,stopRegular}){
- const e=id=>document.getElementById(id);let mode='off',line=0,clock=null,settings={},lines=[],saveTimer,generation=0,picking=false;
+function createFollow({call,native,toast,getSong,getVideo,onHighlight,onClear=()=>{},stopRegular}){
+ const e=id=>document.getElementById(id);let mode='off',line=0,lastHighlighted=-1,clock=null,settings={},lines=[],saveTimer,generation=0,picking=false;
  const loaded=call('settingsLoad').then(value=>{try{const object=JSON.parse(value);if(object&&typeof object==='object'&&!Array.isArray(object))settings=object}catch{}}).catch(()=>{});
  const key=()=>{const song=getSong(),video=getVideo();return song&&video?song.sourceUrl+'|'+video:null};
  const offset=()=>Math.max(-120,Math.min(120,Number(settings['offset:'+key()])||0));
  function status(text){e('follow-status').textContent=text;e('follow-live').hidden=!text;e('mark-line').hidden=mode!=='mark';e('follow-mode').value=mode}
- function highlight(index){line=Math.max(0,Math.min(lines.length-1,index));onHighlight(line)}
+ function highlight(index){line=Math.max(0,Math.min(lines.length-1,index));lastHighlighted=line;onHighlight(line)}
  function save(){clearTimeout(saveTimer);saveTimer=setTimeout(()=>call('settingsSave',{value:JSON.stringify(settings)}).catch(error=>toast(error.message)),150)}
- function stop(){++generation;mode='off';call('speechStop').catch(()=>{});status('')}
+ function stop(){++generation;lastHighlighted=-1;onClear();mode='off';call('speechStop').catch(()=>{});status('')}
  async function videoReady({reload=false}={}){
   const ticket=++generation;await loaded;if(ticket!==generation)return;const k=key(),id=getVideo();if(!k||!lines.length){toast('Mở video YouTube trước khi theo lời.');return}
   stopRegular();mode='time';
-  if(!reload&&cleanTimeline(settings[k],lines.length).length){status('Lời đang theo thời gian YouTube · mốc đã lưu trên máy');return}
+  if(!reload&&cleanTimeline(settings[k],lines.length).length){status('Lời bên dưới đang theo YouTube · mốc đã lưu trên máy');return}
   status('Đang khớp lời với phụ đề của video YouTube…');
   try{const data=await call('api',{path:'/api/video-captions?'+new URLSearchParams({id})});if(ticket!==generation||id!==getVideo())return;
    const timeline=captionTimeline(lines,data.cues);
    if(!data.available||timeline.length<2){mode='off';status(data.reason||'Đã đọc phụ đề nhưng chưa khớp với lời bài hát. Thử bản thu khác hoặc nhập LRC/SRT/VTT.');return}
-   settings[k]=timeline;save();status('Đang theo lời YouTube · '+timeline.length+' mốc khớp từ phụ đề');
+   settings[k]=timeline;save();status('Đang tô sáng lời bên dưới · '+timeline.length+' mốc khớp từ phụ đề');
   }catch{if(ticket===generation){mode='off';status('Chưa kết nối được phụ đề. Thử lại hoặc nhập LRC/SRT/VTT.')}}
  }
  function apply(){const selected=e('follow-mode').value;call('speechStop').catch(()=>{});stopRegular();if(selected==='time'){videoReady();e('follow-dialog').close();return}++generation;mode=selected==='mark'?'mark':'off';if(mode==='mark'&&!key()){mode='off';toast('Mở bản thu YouTube trước khi đánh dấu câu.');return}status(mode==='mark'?'Chọn dòng lời, đánh dấu khi câu trong video bắt đầu.':'');e('follow-dialog').close()}
- async function importText(text){await loaded;const k=key();if(!k)throw new Error('Mở bản thu YouTube trước.');const cues=parseLrc(text,lines);if(!cues.length)throw new Error('Đọc được tệp nhưng chưa khớp câu hát nào. Kiểm tra đúng bài và đúng bản thu.');++generation;settings[k]=cues;save();stopRegular();mode='time';status('Đang theo YouTube · '+cues.length+' mốc từ tệp của bạn');toast('Đã nhập '+cues.length+' mốc lời.');e('follow-dialog').close()}
+ async function importText(text){await loaded;const k=key();if(!k)throw new Error('Mở bản thu YouTube trước.');const cues=parseLrc(text,lines);if(!cues.length)throw new Error('Đọc được tệp nhưng chưa khớp câu hát nào. Kiểm tra đúng bài và đúng bản thu.');++generation;settings[k]=cues;save();stopRegular();mode='time';status('Đang tô sáng lời bên dưới · '+cues.length+' mốc từ tệp của bạn');toast('Đã nhập '+cues.length+' mốc lời.');e('follow-dialog').close()}
  e('follow-open').addEventListener('click',async()=>{await loaded;e('follow-mode').value=mode==='off'?'time':mode;e('follow-offset').value=offset();e('follow-dialog').showModal()});e('follow-close').addEventListener('click',()=>e('follow-dialog').close());e('follow-apply').addEventListener('click',apply);
  e('follow-retry').addEventListener('click',()=>{videoReady({reload:true});e('follow-dialog').close()});
  e('follow-offset').addEventListener('change',async()=>{await loaded;if(!key())return;settings['offset:'+key()]=Math.max(-120,Math.min(120,Number(e('follow-offset').value)||0));e('follow-offset').value=offset();save();toast('Đã lưu độ dịch mốc cho bản thu này.')});
@@ -134,7 +187,7 @@ function createFollow({call,native,toast,getSong,getVideo,onHighlight,stopRegula
  e('mark-line').addEventListener('click',()=>{const k=key();if(!k||!clock||!Number.isFinite(clock.time)){toast('Chưa nhận được thời gian thật của video.');return}const cues=cleanTimeline(settings[k],lines.length).filter(c=>c.line!==line);cues.push({time:Math.max(0,clock.time-offset()),line});settings[k]=cleanTimeline(cues,lines.length);save();status('Đã ghi mốc '+clock.time.toFixed(1)+' giây · câu '+(line+1));highlight(line+1)});
  e('lrc-import').addEventListener('click',()=>importText(e('lrc-input').value).catch(error=>toast(error.message)));
  e('subtitle-file').addEventListener('click',async()=>{picking=true;try{const text=await readMusicText({native,call});if(text)await importText(text)}catch(error){toast(error.message)}finally{picking=false}});
- return {stop,videoReady,onSong(song){stop();lines=String(song?.content||'').split('\n');line=0;clock=null},select(index){highlight(index)},onTick(event){clock=event;if(mode==='time'&&event.id===getVideo()){const next=timedLine(cleanTimeline(settings[key()],lines.length),event.time-offset());if(next!==null&&next!==line)highlight(next)}},get permissionPending(){return picking},get mode(){return mode}};
+ return {stop,videoReady,refresh(){lastHighlighted=-1},onSong(song){stop();lines=String(song?.content||'').split('\n');line=0;clock=null},select(index){highlight(index)},onTick(event){clock=event;if(mode==='time'&&event.id===getVideo()){const next=timedLine(cleanTimeline(settings[key()],lines.length),event.time-offset());if(next!==null&&next!==lastHighlighted)highlight(next);else if(next===null&&lastHighlighted!==-1){lastHighlighted=-1;onClear()}}},get permissionPending(){return picking},get mode(){return mode}};
 }
 
 function createStudio({call,native,toast,beforeRecord}){
@@ -199,77 +252,372 @@ async function transcribeMusicAudio(buffer,{bpm=80,start=0,onProgress=()=>{}}={}
  const hop=256,window=1024,frames=[];for(let i=0;i+window<mono.length;i+=hop){frames.push(detectMusicPitch(mono.subarray(i,i+window),rate));if(frames.length%100===0){onProgress(Math.round(i/count*100));await new Promise(resolve=>setTimeout(resolve,0))}}
  const notes=scoreFromPitches(frames,hop/rate,bpm);if(!notes.some(n=>n.midi!==null))throw new Error('Chưa nhận được giai điệu rõ. Dùng bản hát hoặc nhạc cụ một bè, ít tiếng nền.');onProgress(100);return {notes,seconds:length,limited:buffer.duration-offset>60||notes.length>=128};
 }
-function readMusicAudio({native=false,call}={}){
- if(native)return call('readAudio').then(data=>{if(!data?.base64)return null;const value=atob(data.base64),bytes=new Uint8Array(value.length);for(let i=0;i<value.length;i++)bytes[i]=value.charCodeAt(i);return {bytes:bytes.buffer,name:'Giai điệu nhận diện'}});
- return new Promise((resolve,reject)=>{const input=document.createElement('input');input.type='file';input.accept='audio/*,.mid,.midi';input.hidden=true;document.body.append(input);input.oncancel=()=>{input.remove();resolve(null)};input.onchange=async()=>{try{const file=input.files?.[0];if(!file){resolve(null);return}if(file.size>3000000)throw new Error('Chọn tệp âm thanh dưới 3 MB.');resolve({bytes:await file.arrayBuffer(),name:file.name.replace(/\.[^.]*$/,'')})}catch(error){reject(error)}finally{input.remove()}};input.click()});
+function readMusicAudio({native=false,call,kind='audio'}={}){
+ const inputs={audio:{accept:'audio/*',limit:3000000,name:'Giai điệu nhận diện'},midi:{accept:'.mid,.midi,audio/midi',limit:3000000,name:'Bản nhạc MIDI'},musicxml:{accept:'.musicxml,.xml,application/xml,text/xml',limit:1500000,name:'Bản nhạc MusicXML'}};
+ const source=inputs[kind];
+ if(native)return call('readAudio',{kind}).then(data=>{if(!data?.base64)return null;if(data.base64.length>Math.ceil(source.limit/3)*4)throw new Error('Tệp vượt giới hạn kích thước của Studio.');const value=atob(data.base64),bytes=new Uint8Array(value.length);for(let i=0;i<value.length;i++)bytes[i]=value.charCodeAt(i);return {bytes:bytes.buffer,name:source.name}});
+ return new Promise((resolve,reject)=>{const input=document.createElement('input');input.type='file';input.accept=source.accept;input.hidden=true;document.body.append(input);input.oncancel=()=>{input.remove();resolve(null)};input.onchange=async()=>{try{const file=input.files?.[0];if(!file){resolve(null);return}if(file.size>source.limit)throw new Error('Chọn tệp tối đa '+(source.limit/1000000).toLocaleString('vi-VN')+' MB.');resolve({bytes:await file.arrayBuffer(),name:file.name.replace(/\.[^.]*$/,'')})}catch(error){reject(error)}finally{input.remove()}};input.click()});
 }
 
-// Góc Hợp Âm: offline MIDI -> editable notation and MusicXML export.
-// Only accept simple, measurable monophonic MIDI; never invent notes.
-const be16=(b,i)=>(b[i]<<8)|b[i+1];
-const be32=(b,i)=>(b[i]*16777216+b[i+1]*65536+b[i+2]*256+b[i+3])>>>0;
-function vlq(b,p,end){let n=0;for(let i=0;i<4;i++){if(p>=end)throw Error('MIDI bị cắt.');let v=b[p++];n=(n<<7)|(v&127);if(!(v&128))return [n,p]}throw Error('MIDI có thời gian sai.')}
-function midiToScore(source,{title='Bản nhạc MIDI'}={}){
- const b=source instanceof Uint8Array?source:new Uint8Array(source);
- if(b.length<14||b.length>3000000||String.fromCharCode(...b.slice(0,4))!=='MThd')throw Error('Cần tệp MIDI hợp lệ dưới 3 MB.');
- const h=be32(b,4),format=be16(b,8),nt=be16(b,10),division=be16(b,12);
- if(h<6||h>256||format>1||nt<1||nt>64||!division||(division&32768))throw Error('Định dạng MIDI chưa hỗ trợ.');
- let p=8+h,tempo=500000,tempoSeen=false;const tracks=[];
- for(let t=0;t<nt;t++){
-  if(p+8>b.length||String.fromCharCode(...b.slice(p,p+4))!=='MTrk')throw Error('Thiếu track MIDI.');
-  const end=p+8+be32(b,p+4);if(end>b.length)throw Error('Track MIDI bị cắt.');
-  p+=8;let tick=0,running=0;const starts=new Map(),channels=new Map();
-  while(p<end){
-   let d;[d,p]=vlq(b,p,end);tick+=d;
-   let status=b[p];if(status<128){if(!running)throw Error('MIDI thiếu trạng thái.');status=running}else{p++;running=status<240?status:0}
-   if(status===255){
-    if(p>=end)throw Error('Sự kiện meta lỗi.');const kind=b[p++];let len;[len,p]=vlq(b,p,end);
-    if(p+len>end)throw Error('MIDI meta bị cắt.');
-    if(kind===81&&len===3){const v=b[p]*65536+b[p+1]*256+b[p+2];if(v>0){if(tempoSeen&&v!==tempo)throw Error('MIDI đổi tempo; chưa hỗ trợ tempo map.');tempo=v;tempoSeen=true}}
-    if(kind===88&&len>=2&&(b[p]!==4||b[p+1]!==2))throw Error('Chỉ hỗ trợ MIDI nhịp 4/4; không tự đoán trường độ.');
-    p+=len;continue;
-   }
-   if(status===240||status===247){let len;[len,p]=vlq(b,p,end);p+=len;if(p>end)throw Error('MIDI SysEx bị cắt.');continue}
-   if(status<128||status>239)throw Error('Sự kiện MIDI chưa hỗ trợ.');
-   const type=status>>4,ch=status&15,number=b[p++],vel=(type===12||type===13)?0:b[p++];
-   if(p>end||number>127||vel>127)throw Error('Dữ liệu MIDI không hợp lệ.');
-   if(ch===9)continue;
-   const key=ch+':'+number;
-   if(type===9&&vel>0){const q=starts.get(key)||[];q.push(tick);starts.set(key,q)}
-   if(type===8||(type===9&&vel===0)){const q=starts.get(key);if(q?.length){const start=q.shift();if(tick>start){if(!channels.has(ch))channels.set(ch,[]);channels.get(ch).push({start,end:tick,midi:number})}}}
+// Convert supported sources to editable, single-voice 4/4 notation.
+const sheetMaxNotes = 1024;
+const sheetDurations = [.25, .5, .75, 1, 1.5, 2, 3, 4];
+const sheetHarmonyKinds = {'':'major',m:'minor',7:'dominant',maj7:'major-seventh',m7:'minor-seventh',dim:'diminished',aug:'augmented',sus2:'suspended-second',sus4:'suspended-fourth',6:'major-sixth',m6:'minor-sixth',m7b5:'half-diminished',dim7:'diminished-seventh',9:'dominant-ninth',m9:'minor-ninth',maj9:'major-ninth',mMaj7:'major-minor',add9:'major'};
+const sheetChordPitches = {'C':0,'C#':1,'Db':1,'D':2,'D#':3,'Eb':3,'E':4,'E#':5,'Fb':4,'F':5,'F#':6,'Gb':6,'G':7,'G#':8,'Ab':8,'A':9,'A#':10,'Bb':10,'B':11,'B#':0,'Cb':11};
+const sheetChordNames = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const sheetChordAliases = {maj:'',M:'',M7:'maj7',M9:'maj9',min:'m',min7:'m7',min9:'m9','-':'m','-7':'m7','+':'aug','°':'dim','°7':'dim7','ø':'m7b5','ø7':'m7b5','Δ':'maj7','Δ7':'maj7',sus:'sus4'};
+const sheetExtendedChords = {m7b5:[0,3,6,10],dim7:[0,3,6,9],9:[0,4,7,10,14],m9:[0,3,7,10,14],maj9:[0,4,7,11,14],mMaj7:[0,3,7,11],'7sus4':[0,5,7,10]};
+
+const sheetBpm = value => {
+  if (!Number.isFinite(value) || value < 40 || value > 240) {
+    throw new Error('Studio hỗ trợ tốc độ từ 40 đến 240 BPM.');
   }
-  for(const notes of channels.values())if(notes.length)tracks.push(notes);p=end;
- }
- const candidates=tracks.map(notes=>notes.sort((a,b)=>a.start-b.start||a.midi-b.midi))
-  .filter(notes=>notes.length>=2&&notes.every((n,i)=>n.midi>=48&&n.midi<=84&&(!i||n.start>=notes[i-1].end)));
- candidates.sort((a,b)=>b.length-a.length);
- if(!candidates.length)throw Error('Chưa tìm thấy bè MIDI đơn âm C3–C6. Không tự suy đoán nốt của bản phối đa bè.');
- const notes=[],selected=candidates[0];let position=0,maxError=0;
- const quant=t=>{const beat=t/division,q=Math.round(beat*2);maxError=Math.max(maxError,Math.abs(beat-q/2));return q};
- function append(midi,units){while(units>0){if(notes.length>=128)throw Error('Quá 128 nốt; cần chia bài thành đoạn.');const space=8-position%8;const d=[8,4,2,1].find(v=>v<=units&&v<=space);if(!d)throw Error('Trường độ không hỗ trợ.');notes.push({midi,beats:d/2});position+=d;units-=d}}
- for(const n of selected){const start=quant(n.start),end=quant(n.end);if(end<=start||start<position)throw Error('Nhịp MIDI không thể chuyển chính xác sang lưới nửa phách.');if(start>position)append(null,start-position);append(n.midi,end-start)}
- if(maxError>.2)throw Error('Nhịp MIDI quá phức tạp để lượng tử hóa chính xác.');
- const bpm=Math.round(60000000/tempo);
- if(bpm<40||bpm>240)throw Error('Tempo MIDI nằm ngoài dải hỗ trợ 40–240 BPM.');
- return {format:'goc-score-1',title:String(title).slice(0,100),author:'',bpm,notes,origin:'midi',verified:false,quantizationErrorBeats:maxError};
+  return Math.round(value * 100) / 100;
+};
+
+function sheetSequence() {
+  const notes = [];
+  let position = 0;
+  return {
+    notes,
+    get position() { return position; },
+    append(midi, units, extras = {}) {
+      while (units > 0) {
+        if (notes.length === sheetMaxNotes) throw new Error('Bản phổ vượt quá 1.024 nốt và dấu lặng. Hãy chia tệp thành các đoạn.');
+        const space = 16 - position % 16;
+        const duration = [16, 12, 8, 6, 4, 3, 2, 1].find(value => value <= units && value <= space);
+        units -= duration;
+        notes.push({midi, beats: duration / 4, ...extras, ...(midi !== null && (units || extras.tie) ? {tie: true} : {})});
+        extras = extras.tie ? {tie: true} : {};
+        position += duration;
+      }
+    }
+  };
 }
-const xmlEsc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));
-function scoreToMusicXML(score){
- if(!score||!Array.isArray(score.notes)||!score.notes.length||score.notes.length>128)throw Error('Chưa có nốt để xuất.');
- const name=xmlEsc(score.title||'Góc Hợp Âm'),author=xmlEsc(score.author||'');
- const head='<?xml version="1.0" encoding="utf-8"?>\n<score-partwise version="4.0"><work><work-title>'+name+'</work-title></work><movement-title>'+name+'</movement-title><identification><creator type="composer">'+author+'</creator></identification><part-list><score-part id="P1"><part-name>Melody</part-name></score-part></part-list><part id="P1">';
- const attrs='<attributes><divisions>2</divisions><key><fifths>0</fifths></key><time><beats>4</beats><beat-type>4</beat-type></time><clef><sign>G</sign><line>2</line></clef></attributes>';
- let body='<measure number="1">'+attrs,beats=0,bar=1;
- const letters=['C','C','D','D','E','F','F','G','G','A','A','B'];
- for(let i=0;i<score.notes.length;i++){
-  const n=score.notes[i];if(![.5,1,2,4].includes(n.beats)||!(n.midi===null||Number.isInteger(n.midi)&&n.midi>=48&&n.midi<=84)||beats%4+n.beats>4)throw Error('Nốt hoặc nhịp không hợp lệ.');
-  const pitch=n.midi===null?'<rest/>':'<pitch><step>'+letters[n.midi%12]+'</step>'+([1,3,6,8,10].includes(n.midi%12)?'<alter>1</alter>':'')+'<octave>'+(Math.floor(n.midi/12)-1)+'</octave></pitch>';
-  const kind=n.beats===.5?'eighth':n.beats===1?'quarter':n.beats===2?'half':'whole';
-  body+='<note>'+pitch+'<duration>'+(n.beats*2)+'</duration><type>'+kind+'</type></note>';beats+=n.beats;
-  if(beats%4===0){body+='</measure>';if(i+1<score.notes.length)body+='<measure number="'+(++bar)+'">'}
- }
- if(beats%4!==0)body+='</measure>';
- return head+body+'</part></score-partwise>';
+
+function sheetVlq(bytes, index, end) {
+  let value = 0;
+  for (let i = 0; i < 4 && index < end; i++) {
+    const byte = bytes[index++];
+    value = (value << 7) | (byte & 127);
+    if (byte < 128) return [value, index];
+  }
+  throw new Error('MIDI có thời gian không hợp lệ.');
+}
+
+function midiToSheet(source, title = 'Bản nhạc MIDI') {
+  const bytes = source instanceof Uint8Array ? source : new Uint8Array(source);
+  const tag = index => String.fromCharCode(...bytes.subarray(index, index + 4));
+  if (bytes.length < 14 || bytes.length > 3_000_000 || tag(0) !== 'MThd') {
+    throw new Error('Chọn tệp .mid hoặc .midi hợp lệ, tối đa 3 MB.');
+  }
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const header = view.getUint32(4), format = view.getUint16(8), count = view.getUint16(10), ppq = view.getUint16(12);
+  if (header < 6 || header > 256 || format > 1 || !count || count > 64 || (format === 0 && count !== 1) || !ppq || (ppq & 32768)) {
+    throw new Error('Chỉ hỗ trợ MIDI loại 0 hoặc 1 với thời gian tính theo phách.');
+  }
+
+  let index = 8 + header, tempo = null;
+  const voices = [];
+  for (let track = 0; track < count; track++) {
+    if (index + 8 > bytes.length || tag(index) !== 'MTrk') throw new Error('Thiếu track MIDI.');
+    const end = index + 8 + view.getUint32(index + 4);
+    if (end > bytes.length) throw new Error('Track MIDI bị cắt.');
+    index += 8;
+    let tick = 0, running = 0;
+    const active = new Map(), channels = new Map();
+    while (index < end) {
+      let delta;
+      [delta, index] = sheetVlq(bytes, index, end);
+      tick += delta;
+      if (index === end) throw new Error('Thiếu sự kiện MIDI.');
+      let status = bytes[index];
+      if (status >= 128) {
+        index++;
+        running = status < 240 ? status : 0;
+      } else {
+        status = running;
+      }
+      if (status === 255 || status === 240 || status === 247) {
+        const kind = status === 255 ? bytes[index++] : null;
+        let length;
+        [length, index] = sheetVlq(bytes, index, end);
+        if (index + length > end) throw new Error('Sự kiện MIDI bị cắt.');
+        if (kind === 81) {
+          if (length !== 3) throw new Error('Tempo MIDI không hợp lệ.');
+          const value = bytes[index] * 65536 + bytes[index + 1] * 256 + bytes[index + 2];
+          if (!value || (tempo !== null && tempo !== value) || (tempo === null && tick !== 0)) {
+            throw new Error('MIDI thay đổi tốc độ. Hãy xuất một đoạn có tempo cố định.');
+          }
+          tempo = value;
+        }
+        if (kind === 88 && (length !== 4 || bytes[index] !== 4 || bytes[index + 1] !== 2)) {
+          throw new Error('Studio hiện nhập MIDI nhịp 4/4.');
+        }
+        index += length;
+        continue;
+      }
+      if (status < 128 || status >= 240) throw new Error('Sự kiện MIDI không được hỗ trợ.');
+      const type = status >> 4, channel = status & 15;
+      const size = type === 12 || type === 13 ? 1 : 2;
+      if (index + size > end) throw new Error('Dữ liệu MIDI bị cắt.');
+      const midi = bytes[index], velocity = size === 2 ? bytes[index + 1] : 0;
+      index += size;
+      if (midi >= 128 || velocity >= 128) throw new Error('Dữ liệu MIDI không hợp lệ.');
+      if (channel === 9) continue;
+      if ((type === 11 && midi === 64 && velocity >= 64) || (type === 14 && (midi !== 0 || velocity !== 64))) {
+        throw new Error('MIDI có pedal ngân hoặc uốn cao độ. Hãy xuất nốt giai điệu đã ghi trường độ.');
+      }
+      if (type !== 8 && type !== 9) continue;
+      const key = channel * 128 + midi;
+      if (!channels.has(channel)) channels.set(channel, {notes: [], invalid: false});
+      const voice = channels.get(channel);
+      if (type === 9 && velocity) {
+        if (active.has(key)) voice.invalid = true;
+        active.set(key, tick);
+      } else if (active.has(key)) {
+        const start = active.get(key);
+        active.delete(key);
+        if (tick <= start) voice.invalid = true;
+        if (voice.notes.length <= sheetMaxNotes) voice.notes.push({start, end: tick, midi});
+      } else {
+        voice.invalid = true;
+      }
+    }
+    for (const key of active.keys()) channels.get(Math.floor(key / 128)).invalid = true;
+    for (const voice of channels.values()) {
+      if (voice.invalid) throw new Error('MIDI có nốt chồng cùng cao độ hoặc thiếu điểm kết thúc.');
+      if (voice.notes.length) voices.push(voice.notes);
+    }
+  }
+  if (voices.length !== 1) throw new Error('Hãy xuất một bè giai điệu MIDI riêng, gồm một kênh nhạc cụ.');
+  const selected = voices[0].sort((a, b) => a.start - b.start);
+  if (selected.length > sheetMaxNotes) throw new Error('MIDI vượt quá 1.024 nốt.');
+  const sequence = sheetSequence();
+  let previousEnd = 0, maxError = 0;
+  const quantize = tick => {
+    const beat = tick / ppq;
+    const unit = Math.round(beat * 4);
+    maxError = Math.max(maxError, Math.abs(beat - unit / 4));
+    return unit;
+  };
+  for (const note of selected) {
+    if (note.midi < 48 || note.midi > 84 || note.start < previousEnd) {
+      throw new Error('Hãy dùng một bè MIDI không chồng nốt trong âm vực C3–C6.');
+    }
+    const start = quantize(note.start), end = quantize(note.end);
+    if (maxError > .09 || end <= start) throw new Error('Trường độ MIDI lệch quá 0,09 phách so với lưới 1/16.');
+    sequence.append(null, start - sequence.position);
+    sequence.append(note.midi, end - start);
+    previousEnd = note.end;
+  }
+  return {title, bpm: sheetBpm(60_000_000 / (tempo ?? 500000)), notes: sequence.notes, origin: 'midi-import', maxError};
+}
+
+const sheetChild = (element, name) => Array.from(element.children).find(child => child.localName === name);
+const sheetText = (element, name) => sheetChild(element, name)?.textContent.trim() ?? '';
+
+function sheetXmlHarmony(event) {
+  const root = sheetChild(event, 'root'), bass = sheetChild(event, 'bass'), kind = sheetChild(event, 'kind');
+  function name(pitch, type) {
+    const step = sheetText(pitch, type+'-step'), alter = Number(sheetText(pitch, type+'-alter') || 0);
+    if (!/^[A-G]$/.test(step) || ![-1,0,1].includes(alter)) throw new Error('Ký hiệu hợp âm MusicXML chưa hỗ trợ.');
+    return step+(alter === 1 ? '#' : alter === -1 ? 'b' : '');
+  }
+  const degrees = Array.from(event.children).filter(child => child.localName === 'degree');
+  if (!root || !kind || sheetChild(event,'offset')) throw new Error('Vị trí hợp âm MusicXML chưa hỗ trợ.');
+  const value = kind.textContent.trim(), label = kind.getAttribute('text') ?? '';
+  const add9 = value === 'major' && degrees.length === 1 && sheetText(degrees[0], 'degree-value') === '9' &&
+   sheetText(degrees[0], 'degree-alter') === '0' && sheetText(degrees[0], 'degree-type') === 'add';
+  const suffix = add9 ? 'add9' : Object.keys(sheetHarmonyKinds).find(symbol => symbol !== 'add9' && sheetHarmonyKinds[symbol] === value);
+  const other = value === 'other' && label === '7sus4' ? label : undefined;
+  if ((suffix === undefined && other === undefined) || (degrees.length && !add9)) throw new Error('Loại hợp âm MusicXML chưa hỗ trợ.');
+  return name(root,'root')+(suffix ?? other)+(bass ? '/'+name(bass,'bass') : '');
+}
+
+function musicXmlToSheet(text, title = 'Bản nhạc MusicXML', Parser = globalThis.DOMParser) {
+  // Standard MusicXML files often carry this external declaration. Strip it before parsing.
+  const xml = text.replace(/<!DOCTYPE\s+score-partwise\s+PUBLIC\s+["']-\/\/Recordare\/\/DTD MusicXML [\d.]+ Partwise\/\/EN["']\s+["']https?:\/\/www\.musicxml\.org\/dtds\/partwise\.dtd["']\s*>/i, '');
+  if (xml.length > 1_500_000 || /<!DOCTYPE|<!ENTITY/i.test(xml)) throw new Error('MusicXML quá lớn hoặc chứa khai báo XML chưa hỗ trợ.');
+  const document = new Parser().parseFromString(xml, 'application/xml');
+  const root = document.documentElement;
+  if (root?.localName !== 'score-partwise' || document.getElementsByTagName('parsererror').length) {
+    throw new Error('Cần tệp MusicXML score-partwise hợp lệ, tối đa 1,5 MB.');
+  }
+  const parts = Array.from(root.children).filter(element => element.localName === 'part');
+  if (parts.length !== 1) throw new Error('Studio hiện nhập MusicXML một bè. Hãy xuất riêng bè giai điệu.');
+  const measures = Array.from(parts[0].children).filter(element => element.localName === 'measure');
+  const sequence = sheetSequence(), voices = new Set();
+  let divisions = 1, bpm = null, pendingTie = null;
+  for (const [index, measure] of measures.entries()) {
+    const start = sequence.position;
+    let harmony = null;
+    for (const event of measure.children) {
+      if (event.localName === 'attributes') {
+        if (sheetChild(event,'transpose')) throw new Error('MusicXML có nhạc cụ chuyển giọng. Hãy xuất ở cao độ thực.');
+        if (sheetChild(event, 'divisions')) divisions = Number(sheetText(event, 'divisions'));
+        if (!Number.isInteger(divisions) || divisions < 1) throw new Error('Divisions MusicXML không hợp lệ.');
+        const time = sheetChild(event, 'time');
+        if (time && (sheetText(time, 'beats') !== '4' || sheetText(time, 'beat-type') !== '4')) {
+          throw new Error('Studio hiện nhập MusicXML nhịp 4/4.');
+        }
+      }
+      if (event.localName === 'direction' || event.localName === 'sound') {
+        const sound = event.localName === 'sound' ? event : sheetChild(event, 'sound');
+        const metronome = sheetChild(sheetChild(event, 'direction-type') ?? event, 'metronome');
+        if (metronome && !sound?.hasAttribute('tempo') && (sheetText(metronome, 'beat-unit') !== 'quarter' || sheetChild(metronome, 'beat-unit-dot'))) {
+          throw new Error('MusicXML cần tempo theo nốt đen.');
+        }
+        const tempo = sound?.getAttribute('tempo') ?? (metronome ? sheetText(metronome, 'per-minute') : null);
+        if (tempo !== null) {
+          const value = sheetBpm(Number(tempo));
+          if ((bpm !== null && bpm !== value) || (bpm === null && sequence.position !== 0)) throw new Error('MusicXML thay đổi tốc độ giữa bài.');
+          bpm = value;
+        }
+      }
+      if (event.localName === 'backup' || event.localName === 'forward') throw new Error('MusicXML có nhiều bè hoặc vị trí ngắt chưa hỗ trợ.');
+      if (event.localName === 'harmony') {
+        if (harmony !== null) throw new Error('Có nhiều hợp âm tại một vị trí MusicXML.');
+        harmony = sheetXmlHarmony(event);
+      }
+      if (event.localName !== 'note') continue;
+      voices.add(sheetText(event, 'voice') || '1');
+      if (voices.size > 1 || sheetChild(event, 'chord') || sheetChild(event, 'grace') || sheetChild(event, 'cue')) {
+        throw new Error('Studio hỗ trợ MusicXML một bè, không có chồng nốt hoặc nốt hoa mỹ.');
+      }
+      const units = Number(sheetText(event, 'duration')) / divisions * 4;
+      if (!Number.isInteger(units) || units < 1 || sequence.position - start + units > 16) {
+        throw new Error('Trường độ MusicXML cần khớp lưới 1/16 và ô nhịp 4/4.');
+      }
+      const pitch = sheetChild(event, 'pitch');
+      let midi = null;
+      if (pitch) {
+        const semitone = {C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11}[sheetText(pitch, 'step')];
+        const octave = sheetText(pitch, 'octave'), alter = Number(sheetText(pitch, 'alter') || 0);
+        if (!/^[0-8]$/.test(octave) || !Number.isInteger(alter) || Math.abs(alter) > 2) throw new Error('Cao độ MusicXML không hợp lệ.');
+        midi = (Number(octave) + 1) * 12 + semitone + alter;
+        if (!Number.isInteger(midi) || midi < 48 || midi > 84) throw new Error('Cao độ MusicXML nằm ngoài âm vực C3–C6.');
+      } else if (!sheetChild(event, 'rest')) {
+        throw new Error('MusicXML có nốt không xác định được cao độ.');
+      }
+      const ties = Array.from(event.children).filter(child => child.localName === 'tie').map(child => child.getAttribute('type'));
+      if ((pendingTie !== null) !== ties.includes('stop') || (pendingTie !== null && midi !== pendingTie) || (midi === null && ties.length)) {
+        throw new Error('MusicXML có dấu nối thiếu nốt liên kết.');
+      }
+      const lyric = sheetChild(event, 'lyric');
+      const line = lyric ? sheetText(lyric, 'text').slice(0, 120) : '';
+      const syllabic = lyric ? sheetText(lyric, 'syllabic') : '';
+      pendingTie = ties.includes('start') ? midi : null;
+      sequence.append(midi, units, {...(pendingTie !== null ? {tie: true} : {}), ...(line ? {lyric: line, syllabic} : {}), ...(harmony ? {chord: harmony} : {})});
+      harmony = null;
+    }
+    if (harmony !== null) throw new Error('Hợp âm MusicXML nằm ngoài vị trí nốt hoặc dấu lặng.');
+    if (index < measures.length - 1 && sequence.position - start !== 16) {
+      throw new Error('MusicXML có ô nhịp lấy đà hoặc thiếu phách giữa bài.');
+    }
+  }
+  if (pendingTie !== null || !sequence.notes.some(note => note.midi !== null)) throw new Error('MusicXML thiếu nốt hoàn chỉnh.');
+  const work = sheetChild(root, 'work'), identification = sheetChild(root, 'identification');
+  const creator = identification && Array.from(identification.children).find(child => child.localName === 'creator' && child.getAttribute('type') === 'composer');
+  const sourceStatus = identification && sheetChild(identification, 'miscellaneous');
+  const sourceOrigin = sourceStatus && Array.from(sourceStatus.children).find(child => child.getAttribute('name') === 'goc-sheet-origin')?.textContent;
+  return {
+    title: (work && sheetText(work, 'work-title')) || sheetText(root, 'movement-title') || title,
+    author: creator?.textContent.trim() ?? '', bpm: bpm ?? 80, notes: sequence.notes,
+    origin: ['audio-draft', 'piano-draft', 'organ-draft'].includes(sourceOrigin) ? sourceOrigin : 'musicxml-import'
+  };
+}
+
+function chordAccompaniment(song, instrument, {transpose, chord, bpm = 80} = {}) {
+  if (!['piano','organ'].includes(instrument)) throw new Error('Nhạc cụ chưa hỗ trợ.');
+  const tags = Array.from(String(song?.content ?? '').matchAll(/\[([^\]\r\n]{1,24})\]/g), match => match[1].trim());
+  const sequence = sheetSequence();
+  for (const original of tags) {
+    if (!/^[A-G](?:[#b♯♭])?(?:[^\s/]*)(?:\/[A-G](?:[#b♯♭])?)?$/.test(original)) continue;
+    const symbol = transpose(original.replace(/♯/g, '#').replace(/♭/g, 'b'));
+    const [, root, accidental, quality, bass] = /^([A-G])([#b]?)([^/]*)(?:\/([A-G][#b]?))?$/.exec(symbol) ?? [];
+    const tonic = sheetChordPitches[root + accidental];
+    const suffix = Object.hasOwn(sheetChordAliases, quality) ? sheetChordAliases[quality] : quality;
+    const extras = Object.hasOwn(sheetExtendedChords, suffix) ? sheetExtendedChords[suffix] : null;
+    const notes = extras ? extras.map(interval => 60 + tonic + interval) : chord(sheetChordNames[tonic], suffix);
+    if (!notes.length || (bass && sheetChordPitches[bass] === undefined)) throw new Error('Chưa tạo được bè đệm với hợp âm ' + original + '.');
+    const bassNote = bass ? 48 + sheetChordPitches[bass] : notes[0] - 12;
+    const pattern = instrument === 'piano' ? [bassNote, notes[1], notes[2], notes.at(-1)] : [bassNote, notes[1]];
+    pattern.forEach((midi, index) => sequence.append(midi, 16 / pattern.length, index === 0 ? {chord: root+accidental+suffix+(bass ? '/'+bass : '')} : {}));
+  }
+  if (!sequence.notes.length) throw new Error('Mở bài có hợp âm để tạo bè đệm.');
+  return {title: song.title + (instrument === 'piano' ? ' · Đệm piano' : ' · Đệm organ'), bpm, notes: sequence.notes, origin: instrument + '-draft'};
+}
+
+// Package the rendered A4 pages as PDF image streams without a network dependency.
+function sheetPdfBytes(pages) {
+  if (!pages.length) throw new Error('Chưa có trang để xuất PDF.');
+  const encoder = new TextEncoder(), chunks = [], offsets = [0];
+  let length = 0;
+  function add(value) {
+    const bytes = typeof value === 'string' ? encoder.encode(value) : value;
+    chunks.push(bytes);
+    length += bytes.byteLength;
+  }
+  function object(id, body, stream) {
+    offsets[id] = length;
+    add(id + ' 0 obj\n' + body);
+    if (stream) {
+      add('\nstream\n');
+      add(stream);
+      add('\nendstream');
+    }
+    add('\nendobj\n');
+  }
+  add('%PDF-1.4\n');
+  add(new Uint8Array([37, 226, 227, 207, 211, 10]));
+  object(1, '<< /Type /Catalog /Pages 2 0 R >>');
+  object(2, '<< /Type /Pages /Count ' + pages.length + ' /Kids [' + pages.map((_, i) => (3 + i * 3) + ' 0 R').join(' ') + '] >>');
+  for (const [index, page] of pages.entries()) {
+    const id = 3 + index * 3;
+    const width = 539.28, height = width * page.height / page.width;
+    const draw = encoder.encode('q ' + width + ' 0 0 ' + height.toFixed(3) + ' 27.998 ' + (813.892 - height).toFixed(3) + ' cm /Sheet Do Q');
+    object(id, '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.276 841.89] /Resources << /XObject << /Sheet ' + (id + 1) + ' 0 R >> >> /Contents ' + (id + 2) + ' 0 R >>');
+    object(id + 1, '<< /Type /XObject /Subtype /Image /Width ' + page.width + ' /Height ' + page.height + ' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ' + page.bytes.byteLength + ' >>', page.bytes);
+    object(id + 2, '<< /Length ' + draw.byteLength + ' >>', draw);
+  }
+  const xref = length;
+  add('xref\n0 ' + offsets.length + '\n0000000000 65535 f \n');
+  for (const offset of offsets.slice(1)) add(String(offset).padStart(10, '0') + ' 00000 n \n');
+  add('trailer\n<< /Size ' + offsets.length + ' /Root 1 0 R >>\nstartxref\n' + xref + '\n%%EOF\n');
+  const output = new Uint8Array(length);
+  let position = 0;
+  for (const bytes of chunks) {
+    output.set(bytes, position);
+    position += bytes.byteLength;
+  }
+  return output;
+}
+
+async function sheetPdfFromSvg(svgs) {
+  const pages = [];
+  for (const svg of svgs) {
+    const url = URL.createObjectURL(new Blob([svg], {type: 'image/svg+xml;charset=utf-8'}));
+    try {
+      const image = new Image();
+      image.src = url;
+      await image.decode();
+      const canvas = document.createElement('canvas');
+      canvas.width = 1600;
+      canvas.height = Math.round(image.naturalHeight / image.naturalWidth * canvas.width);
+      const context = canvas.getContext('2d', {alpha: false});
+      context.fillStyle = 'white';
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', .94));
+      if (!blob) throw new Error('Thiết bị chưa kết xuất được trang PDF.');
+      pages.push({width: canvas.width, height: canvas.height, bytes: new Uint8Array(await blob.arrayBuffer())});
+      canvas.width = 0;
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
+  return sheetPdfBytes(pages);
 }
 
 // Góc Hợp Âm music workspace. Project developer: NPT Duy.
@@ -277,46 +625,249 @@ const musicNames=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 const musicQualities={'':[0,4,7],m:[0,3,7],'7':[0,4,7,10],maj7:[0,4,7,11],m7:[0,3,7,10],dim:[0,3,6],aug:[0,4,8],sus2:[0,2,7],sus4:[0,5,7],'6':[0,4,7,9],m6:[0,3,7,9],add9:[0,4,7,14]};
 const musicEscape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 function musicChord(root,quality=''){const r=musicNames.indexOf(root),q=musicQualities[quality];if(r<0||!q)return [];return q.map(n=>60+r+n)}
-function cleanScore(value){
- if(!value||typeof value!=='object'||Array.isArray(value))throw new Error('Tệp sheet không hợp lệ.');
- const notes=[];let beat=0;
- for(const n of (Array.isArray(value.notes)?value.notes:[]).slice(0,128)){if(!n||![.5,1,2,4].includes(n.beats)||!(n.midi===null||Number.isInteger(n.midi)&&n.midi>=48&&n.midi<=84))throw new Error('Nốt trong sheet không hợp lệ.');if((beat%4)+n.beats>4)throw new Error('Nốt vượt quá ô nhịp 4/4.');notes.push({midi:n.midi,beats:n.beats});beat+=n.beats}
- return {format:'goc-score-1',title:String(value.title||'Giai điệu của tôi').slice(0,100),author:String(value.author||'').slice(0,100),bpm:Math.max(40,Math.min(240,Number(value.bpm)||80)),notes,origin:['midi','audio'].includes(value.origin)?value.origin:'manual',verified:false};
-}
-function scoreSvg(value,blank=false){
- const score=cleanScore(value),total=score.notes.reduce((s,n)=>s+n.beats,0),systems=blank?4:Math.max(1,Math.ceil(total/16)),height=170+systems*150;let svg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 ${height}" role="img" aria-label="Sheet ${musicEscape(score.title)}"><rect width="800" height="${height}" fill="white"/><g fill="#19151d" font-family="Georgia,serif"><text x="400" y="38" font-size="25" text-anchor="middle">${musicEscape(blank?'Giấy kẻ nhạc':score.title)}</text><text x="752" y="64" text-anchor="end" font-size="14">${musicEscape(score.author)}</text><text x="48" y="82" font-size="13">4/4 · ♩ = ${score.bpm} · Đô trưởng / La thứ</text>`;
- for(let row=0;row<systems;row++){const top=110+row*150;for(let line=0;line<5;line++)svg+=`<path d="M48 ${top+line*10}H752" fill="none" stroke="#333"/>`;svg+=`<text x="48" y="${top+35}" font-size="49">𝄞</text>`;for(let bar=0;bar<=4;bar++)svg+=`<path d="M${84+bar*167} ${top}v40" stroke="#333"/>`;svg+=`<text x="88" y="${top-12}" font-size="11">${row*4+1}</text>`}
- let beat=0;for(const n of (blank?[]:score.notes)){const row=Math.floor(beat/16),bar=Math.floor(beat%16/4),x=98+bar*167+(beat%4)*37,top=110+row*150;
-  if(n.midi===null){svg+=`<text x="${x-6}" y="${top+29}" font-size="25">${n.beats===4?'𝄻':n.beats===2?'𝄼':'𝄽'}</text>`}
-  else{const pitch=n.midi%12,step=[0,0,1,1,2,3,3,4,4,5,5,6][pitch]+Math.floor((n.midi-60)/12)*7,y=top+50-step*5;
-   for(let ledger=top+50;y>=ledger;ledger+=10)svg+=`<path d="M${x-10} ${ledger}h20" stroke="#333"/>`;
-   for(let ledger=top-10;y<=ledger;ledger-=10)svg+=`<path d="M${x-10} ${ledger}h20" stroke="#333"/>`;
-   if([1,3,6,8,10].includes(pitch))svg+=`<text x="${x-18}" y="${y+5}" font-size="18">♯</text>`;
-   svg+=`<ellipse cx="${x}" cy="${y}" rx="7" ry="4.8" transform="rotate(-18 ${x} ${y})" fill="${n.beats>=2?'white':'#19151d'}" stroke="#19151d" stroke-width="1.5"/>`;
-   if(n.beats<4){const down=y<top+20,stemx=x+(down?-6:6),end=y+(down?30:-30);svg+=`<path d="M${stemx} ${y}V${end}" stroke="#19151d" stroke-width="1.4"/>`;if(n.beats===.5)svg+=`<path d="M${stemx} ${end}q${down?-13:13} 8 4 18" fill="none" stroke="#19151d" stroke-width="2"/>`}
-  }beat+=n.beats;
+const musicOrigins = {
+ 'midi-import': 'Chuyển từ MIDI do bạn chọn',
+ 'musicxml-import': 'Chuyển từ MusicXML do bạn chọn',
+ 'audio-draft': 'Bản nháp nhận dạng âm thanh · Cần đối chiếu',
+ 'piano-draft': 'Bè đệm piano từ hợp âm · Nhịp đệm quy ước',
+ 'organ-draft': 'Bè đệm organ từ hợp âm · Nhịp đệm quy ước'
+};
+const musicSyllabic = ['single','begin','middle','end'];
+const musicChordSymbol = /^[A-G][#b]?[a-zA-Z0-9+°øΔ-]*(?:\/[A-G][#b]?)?$/u;
+function cleanScore(value) {
+ if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Tệp sheet không hợp lệ.');
+ const input = Array.isArray(value.notes) ? value.notes : [];
+ if (input.length > sheetMaxNotes) throw new Error('Bản phổ vượt quá 1.024 nốt và dấu lặng.');
+ const notes = [];
+ let beat = 0;
+ for (const [index, n] of input.entries()) {
+  if (!n || !sheetDurations.includes(n.beats) || !(n.midi === null || Number.isInteger(n.midi) && n.midi >= 48 && n.midi <= 84)) throw new Error('Nốt trong sheet không hợp lệ.');
+  if (beat % 4 + n.beats > 4) throw new Error('Nốt vượt quá ô nhịp 4/4.');
+  const note = {midi: n.midi, beats: n.beats};
+  if (n.midi !== null && n.tie === true && input[index + 1]?.midi === n.midi) note.tie = true;
+  if (typeof n.chord === 'string' && n.chord.length <= 24 && musicChordSymbol.test(n.chord)) note.chord = n.chord;
+  if (typeof n.lyric === 'string' && n.lyric) {
+   note.lyric = n.lyric.slice(0,120);
+   if (musicSyllabic.includes(n.syllabic)) note.syllabic = n.syllabic;
+  }
+  notes.push(note);
+  beat += n.beats;
  }
- return svg+`<text x="400" y="${height-20}" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#666">Soạn tại Góc Hợp Âm · NPT Duy</text></g></svg>`;
+ const score = {format:'goc-score-1',title:String(value.title || 'Giai điệu của tôi').slice(0,100),author:String(value.author || '').slice(0,100),bpm:Math.max(40,Math.min(240,Number(value.bpm) || 80)),notes};
+ if (typeof value.origin === 'string' && Object.hasOwn(musicOrigins, value.origin)) score.origin = value.origin;
+ return score;
 }
-function createMusicTools({native=false,call=async()=>true,toast=()=>{},getSong=()=>null}={}){
- let data={score:{format:'goc-score-1',title:'Giai điệu của tôi',author:'',bpm:80,notes:[]},notes:'',sessions:[]};
- try{const v=JSON.parse(localStorage.getItem('goc-music-workspace-v1')||'null');if(v){data={score:cleanScore(v.score),notes:String(v.notes||'').slice(0,15000),sessions:Array.isArray(v.sessions)?v.sessions.filter(s=>s&&Number.isFinite(s.minutes)&&s.minutes>0&&typeof s.date==='string').slice(-30):[]}}}catch{}
+
+const musicXmlText = value => musicEscape(value.replace(/[^\x09\x0A\x0D\x20-\uD7FF\uE000-\uFFFD\u{10000}-\u{10FFFF}]/gu,''));
+const musicNoteType = {0.25:'16th',0.5:'eighth',0.75:'eighth',1:'quarter',1.5:'quarter',2:'half',3:'half',4:'whole'};
+const musicDotted = [0.75,1.5,3];
+function musicHarmonyXml(symbol) {
+ if (!symbol) return '';
+ const [,root,alter,quality,bass,bassAlter] = /^([A-G])([#b]?)([^/]*)(?:\/([A-G])([#b]?))?$/.exec(symbol);
+ const alteration = (prefix, accidental) => accidental ? '<'+prefix+'-alter>'+(accidental === '#' ? 1 : -1)+'</'+prefix+'-alter>' : '';
+ const kind = Object.hasOwn(sheetHarmonyKinds, quality) ? sheetHarmonyKinds[quality] : 'other';
+ return '<harmony><root><root-step>'+root+'</root-step>'+alteration('root',alter)+'</root><kind text="'+musicXmlText(quality)+'">'+kind+'</kind>'+
+  (bass ? '<bass><bass-step>'+bass+'</bass-step>'+alteration('bass',bassAlter)+'</bass>' : '')+
+  (quality === 'add9' ? '<degree><degree-value>9</degree-value><degree-alter>0</degree-alter><degree-type>add</degree-type></degree>' : '')+'</harmony>';
+}
+
+function scoreMusicXml(value) {
+ const score = cleanScore(value);
+ if (!score.notes.length) throw new Error('Thêm nốt vào sheet trước khi xuất.');
+ const divisions = score.notes.some(n => !Number.isInteger(n.beats*2)) ? 4 : 2;
+ const bars = [];
+ let events = [], beats = 0;
+ for (const [index, note] of score.notes.entries()) {
+  const pitchName = note.midi === null ? null : musicNames[note.midi%12];
+  const pitch = pitchName === null ? '<rest/>' : '<pitch><step>'+pitchName[0]+'</step>'+(pitchName.length === 2 ? '<alter>1</alter>' : '')+'<octave>'+(Math.floor(note.midi/12)-1)+'</octave></pitch>';
+  const ties = [score.notes[index-1]?.tie && 'stop', note.tie && 'start'].filter(Boolean);
+  const lyric = note.lyric ? '<lyric>'+(note.syllabic ? '<syllabic>'+note.syllabic+'</syllabic>' : '')+'<text>'+musicXmlText(note.lyric)+'</text></lyric>' : '';
+  events.push(musicHarmonyXml(note.chord)+'<note>'+pitch+'<duration>'+(note.beats*divisions)+'</duration>'+
+   ties.map(type => '<tie type="'+type+'"/>').join('')+'<type>'+musicNoteType[note.beats]+'</type>'+(musicDotted.includes(note.beats) ? '<dot/>' : '')+
+   (ties.length ? '<notations>'+ties.map(type => '<tied type="'+type+'"/>').join('')+'</notations>' : '')+lyric+'</note>');
+  beats += note.beats;
+  if (beats === 4) { bars.push({events,beats}); events = []; beats = 0; }
+ }
+ if (events.length) bars.push({events,beats});
+ const setup = '<attributes><divisions>'+divisions+'</divisions><time><beats>4</beats><beat-type>4</beat-type></time><clef><sign>G</sign><line>2</line></clef></attributes><direction><direction-type><metronome><beat-unit>quarter</beat-unit><per-minute>'+score.bpm+'</per-minute></metronome></direction-type><sound tempo="'+score.bpm+'"/></direction>';
+ const creator = score.author ? '<creator type="composer">'+musicXmlText(score.author)+'</creator>' : '';
+ const provenance = score.origin ? '<miscellaneous><miscellaneous-field name="source-status">'+musicXmlText(musicOrigins[score.origin])+'</miscellaneous-field><miscellaneous-field name="goc-sheet-origin">'+score.origin+'</miscellaneous-field></miscellaneous>' : '';
+ const measures = bars.map((bar,i) => '<measure number="'+(i+1)+'"'+(bar.beats===4 ? '' : ' implicit="yes"')+'>'+(i===0 ? setup : '')+bar.events.join('')+'</measure>').join('\n');
+ return '<?xml version="1.0" encoding="UTF-8"?>\n<score-partwise version="4.0"><work><work-title>'+musicXmlText(score.title)+'</work-title></work><identification>'+creator+provenance+'</identification><part-list><score-part id="P1"><part-name>'+(score.origin?.endsWith('-draft') && score.origin !== 'audio-draft' ? 'Bè đệm' : 'Giai điệu')+'</part-name></score-part></part-list><part id="P1">\n'+measures+'\n</part></score-partwise>\n';
+}
+
+const musicBarsPerRow = score => score.notes.some(note => note.beats < .5 || note.beats === .75) ? 2 : 4;
+function musicSvg(score, {blank=false, firstBar=1, page='', tieIn=false, barsPerRow=musicBarsPerRow(score)}={}) {
+ const total = score.notes.reduce((s,n) => s+n.beats,0);
+ const rowBeats = barsPerRow*4, barWidth = 668/barsPerRow;
+ const systems = blank ? 6 : Math.max(1,Math.ceil(total/rowBeats));
+ const height = 150+systems*147, title = blank ? 'Giấy kẻ nhạc' : score.title;
+ const label = blank ? 'Góc Hợp Âm · NPT Duy' : musicOrigins[score.origin] || 'Bản soạn tại Góc Hợp Âm · NPT Duy';
+ let svg = '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="'+height+'" viewBox="0 0 800 '+height+'" role="img" aria-label="Sheet '+musicXmlText(title)+'"><rect width="800" height="'+height+'" fill="white"/><g fill="#19151d" font-family="Noto Sans, DejaVu Sans, sans-serif"><text x="48" y="31" fill="#a43b15" font-size="12" font-weight="700">GÓC HỢP ÂM  /  STUDIO BẢN PHỔ</text><text x="48" y="65" font-size="'+Math.min(25,1320/Math.max(1,title.length)).toFixed(1)+'" font-weight="700">'+musicXmlText(title)+'</text><text x="752" y="87" text-anchor="end" font-size="13">'+musicXmlText(score.author)+'</text><text x="48" y="88" font-size="13">4/4 · '+score.bpm+' BPM</text><path d="M48 98H752" stroke="#dccec4"/>';
+ for (let row=0;row<systems;row++) {
+  const top = 131+row*147;
+  for (let line=0;line<5;line++) svg += '<path d="M48 '+(top+line*10)+'H752" stroke="#393039"/>';
+  svg += '<g transform="translate(48 '+(top-6)+')"><path d="M15 52 C23 56 23 43 22 35 L16 8 C13 -4 22 -10 23 -1 C25 8 14 17 8 23 C-4 36 8 49 20 45 C32 42 31 24 21 24 C11 23 8 33 14 38" fill="none" stroke="#19151d" stroke-width="2.4" stroke-linecap="round"/><circle cx="13" cy="52" r="3" fill="#19151d"/></g>';
+  for (let bar=0;bar<=barsPerRow;bar++) svg += '<path d="M'+(84+bar*barWidth)+' '+top+'v40" stroke="#393039"/>';
+  svg += '<text x="48" y="'+(top-13)+'" font-size="10" fill="#68574d">'+(firstBar+row*barsPerRow)+'</text>';
+ }
+ const point = beat => {
+  const row = Math.floor(beat/rowBeats), bar = Math.floor(beat%rowBeats/4);
+  return {row,x:108+bar*barWidth+(beat%4)*(barWidth-27)/4,top:131+row*147};
+ };
+ const tie = (x,y,end) => '<path d="M'+x+' '+y+' Q'+((x+end)/2)+' '+(y+11)+' '+end+' '+y+'" fill="none" stroke="#19151d" stroke-width="1.2"/>';
+ let beat = 0, accidentals = new Map();
+ for (const [index,n] of (blank ? [] : score.notes).entries()) {
+  const {row,x,top} = point(beat);
+  if (beat%4 === 0) accidentals = new Map();
+  if (n.chord) svg += '<text x="'+x+'" y="'+(top-13)+'" font-size="14" fill="#a43b15" font-weight="700">'+musicXmlText(n.chord)+'</text>';
+  if (n.midi === null) {
+   if (n.beats >= 2) svg += '<rect x="'+(x-6)+'" y="'+(top+(n.beats === 4 ? 20 : 15))+'" width="12" height="5"/>';
+   else if (n.beats >= 1) svg += '<path transform="translate('+x+' '+top+')" d="M-3 5l7 9 -6 8 5 6q-7 0 -3 7" fill="none" stroke="#19151d" stroke-width="2.4"/>';
+   else {
+    svg += '<path d="M'+(x+4)+' '+(top+13)+'l-8 22" stroke="#19151d" stroke-width="1.5"/><circle cx="'+(x-4)+'" cy="'+(top+15)+'" r="3"/><path d="M'+(x-4)+' '+(top+17)+'q4 2 8 -4" fill="none" stroke="#19151d"/>';
+    if (n.beats === .25) svg += '<circle cx="'+(x-7)+'" cy="'+(top+24)+'" r="3"/><path d="M'+(x-7)+' '+(top+26)+'q4 2 8 -4" fill="none" stroke="#19151d"/>';
+   }
+   if (musicDotted.includes(n.beats)) svg += '<circle cx="'+(x+11)+'" cy="'+(top+17)+'" r="1.8"/>';
+  } else {
+   const pitch = n.midi%12, step = [0,0,1,1,2,3,3,4,4,5,5,6][pitch]+Math.floor((n.midi-60)/12)*7, y = top+50-step*5;
+   for (let ledger=top+50;y>=ledger;ledger+=10) svg += '<path d="M'+(x-10)+' '+ledger+'h20" stroke="#333"/>';
+   for (let ledger=top-10;y<=ledger;ledger-=10) svg += '<path d="M'+(x-10)+' '+ledger+'h20" stroke="#333"/>';
+   const sharp = [1,3,6,8,10].includes(pitch);
+   if ((accidentals.get(step) || false) !== sharp) svg += '<text x="'+(x-15)+'" y="'+(y+5)+'" font-size="17">'+(sharp ? '♯' : '♮')+'</text>';
+   accidentals.set(step,sharp);
+   svg += '<ellipse cx="'+x+'" cy="'+y+'" rx="6.6" ry="4.4" transform="rotate(-18 '+x+' '+y+')" fill="'+(n.beats>=2 ? 'white' : '#19151d')+'" stroke="#19151d" stroke-width="1.5"/>';
+   if (n.beats<4) {
+    const down = y<top+20, stemx=x+(down?-6:6), end=y+(down?28:-28);
+    svg += '<path d="M'+stemx+' '+y+'V'+end+'" stroke="#19151d" stroke-width="1.4"/>';
+    if (n.beats<1) svg += '<path d="M'+stemx+' '+end+'q'+(down?-10:10)+' 7 '+(down?-4:4)+' 16" fill="none" stroke="#19151d" stroke-width="1.7"/>';
+    if (n.beats===.25) svg += '<path d="M'+stemx+' '+(end+(down?-6:6))+'q'+(down?-10:10)+' 7 '+(down?-4:4)+' 16" fill="none" stroke="#19151d" stroke-width="1.7"/>';
+   }
+   if (musicDotted.includes(n.beats)) svg += '<circle cx="'+(x+11)+'" cy="'+(y-2)+'" r="1.8"/>';
+   if (n.tie) {
+    const next = point(beat+n.beats);
+    svg += tie(x+3,y+7,next.row===row ? next.x-3 : 750);
+   }
+   if ((!index && tieIn) || (score.notes[index-1]?.tie && beat%rowBeats===0)) svg += tie(89,y+7,x-3);
+  }
+  if (n.lyric) svg += '<text x="'+x+'" y="'+(top+102)+'" font-size="11" text-anchor="middle">'+musicXmlText(n.lyric)+(n.syllabic==='begin'||n.syllabic==='middle'?' −':'')+'</text>';
+  beat += n.beats;
+ }
+ return svg+'<path d="M48 '+(height-48)+'H752" stroke="#dccec4"/><text x="48" y="'+(height-26)+'" font-size="11" fill="#615149">'+musicXmlText(label)+'</text><text x="752" y="'+(height-26)+'" text-anchor="end" font-size="11">'+page+'</text></g></svg>';
+}
+function scoreSvg(value, blank=false) {
+ return musicSvg(cleanScore(value),{blank});
+}
+function scorePages(value) {
+ const score = cleanScore(value), pages = [[]];
+ const barsPerRow = musicBarsPerRow(score), barsPerPage = 6*barsPerRow;
+ let beat = 0;
+ for (const note of score.notes) {
+  if (beat && beat % (barsPerPage*4) === 0) pages.push([]);
+  pages.at(-1).push(note);
+  beat += note.beats;
+ }
+ return pages.map((notes,index) => musicSvg({...score,notes},{firstBar:1+barsPerPage*index,barsPerRow,page:(index+1)+' / '+pages.length,tieIn:pages[index-1]?.at(-1)?.tie}));
+}
+const musicStudioActions = [
+ ['music-find-pdf','01','Tìm bản phổ PDF','Tra kho nguồn đang có'],
+ ['music-import-midi','02','MIDI → bản phổ','Đọc nốt và nhịp từ tệp'],
+ ['music-import-xml','03','MusicXML → bản phổ','Mở và chỉnh nốt có sẵn'],
+ ['music-transcribe','04','Audio → nháp giai điệu','Nhận nốt ngay trên máy'],
+ ['music-make-piano','05','Tạo bè đệm piano','Rải nốt từ hợp âm bài đang mở'],
+ ['music-make-organ','06','Tạo bè đệm organ','Âm trầm và nốt đỡ từ hợp âm']
+];
+function musicStudioPanel() {
+ return '<div class="music-studio-banner"><span class="music-kicker">STUDIO GÓC HỢP ÂM</span><h3>Từ nguồn nhạc đến bản phổ</h3><p id="music-source-song">Chọn một nguồn để bắt đầu.</p></div>'+
+  '<div class="music-studio-grid" aria-label="Công cụ tạo và tìm bản phổ">'+musicStudioActions.map(([id,number,title,description])=>
+   '<button type="button" id="'+id+'"><span aria-hidden="true">'+number+'</span><strong>'+title+'</strong><small>'+description+'</small></button>').join('')+'</div>'+
+  '<p class="music-muted">Nhập một bè C3–C6, nhịp 4/4. Audio hát hoặc đàn riêng dưới 3 MB, tối đa 60 giây theo BPM đã chọn. Bè đệm dùng một ô nhịp cho mỗi hợp âm.</p>'+
+  '<div class="music-fields music-studio-controls"><label>Audio bắt đầu từ giây<input id="music-audio-start" type="number" min="0" max="3600" value="0"></label>'+
+  '<label>Bản phổ trên máy<select id="music-saved-sheets"></select></label><button id="music-open-saved">Mở bản đã lưu</button></div>'+
+  '<p id="music-job-status" role="status" aria-live="polite"></p><h3>Chỉnh, nghe và xuất bản phổ</h3>';
+}
+function createMusicTools({native=false,call=async()=>true,toast=()=>{},getSong=()=>null,getShift=()=>0,onFindPdf=()=>{}}={}){
+ let data={score:{format:'goc-score-1',title:'Giai điệu của tôi',author:'',bpm:80,notes:[]},notes:'',sessions:[],savedSheets:[],activeSheet:''};
+ try{const v=JSON.parse(localStorage.getItem('goc-music-workspace-v1')||'null');if(v){data={...data,score:cleanScore(v.score),notes:String(v.notes||'').slice(0,15000),sessions:Array.isArray(v.sessions)?v.sessions.filter(s=>s&&Number.isFinite(s.minutes)&&s.minutes>0&&typeof s.date==='string').slice(-30):[]};
+  for(const entry of Array.isArray(v.savedSheets)?v.savedSheets:[]){
+   try{if(typeof entry?.id==='string' && !data.savedSheets.some(item=>item.id===entry.id))data.savedSheets.push({id:entry.id,score:cleanScore(entry.score)})}catch{}
+  }
+  if(data.savedSheets.some(entry=>entry.id===v.activeSheet))data.activeSheet=v.activeSheet;
+ }}catch{}
  const dialog=document.createElement('dialog');dialog.id='music-tools';dialog.className='music-tools';dialog.setAttribute('aria-labelledby','music-title');
- dialog.innerHTML=`<div class="music-head"><div><span class="music-kicker">GÓC HỢP ÂM · NPT DUY</span><h2 id="music-title">Góc luyện nhạc</h2></div><button data-music-close aria-label="Đóng công cụ">×</button></div><nav class="music-tabs" aria-label="Công cụ âm nhạc"><button data-music-tab="chords" aria-pressed="true">Hợp âm</button><button data-music-tab="score" aria-pressed="false">Sheet nhạc</button><button data-music-tab="practice" aria-pressed="false">Buổi tập</button></nav><section data-music-panel="chords"><p class="music-muted">12 giọng · 12 loại hợp âm · phát bằng âm tổng hợp trên thiết bị.</p><div class="music-fields"><label>Âm gốc<select id="music-root">${musicNames.map(n=>`<option>${n}</option>`).join('')}</select></label><label>Loại hợp âm<select id="music-quality">${Object.keys(musicQualities).map(q=>`<option value="${q}">${q||'Trưởng'}${q==='m'?' · thứ':''}</option>`).join('')}</select></label></div><div class="music-chord"><strong id="music-chord-name">C</strong><p id="music-tones"></p><div id="music-piano" aria-label="Các nốt của hợp âm"></div><button id="music-play-chord">▶ Nghe hợp âm</button></div><h3>Gam & vòng hòa âm</h3><p id="music-scale"></p><p id="music-progression"></p><button id="music-play-progression">▶ Nghe vòng I – vi – IV – V</button><p class="music-muted">Ký hiệu phím thăng (#); các nốt đồng âm có thể được viết khác trong bản nhạc.</p></section><section data-music-panel="score" hidden><p class="music-muted">Soạn giai điệu một bè, nhịp 4/4. Thêm từng nốt, phát lại, in hoặc lưu bản soạn của bạn.</p><div class="music-fields"><label>Tên bản soạn<input id="music-score-title" maxlength="100"></label><label>Người soạn<input id="music-score-author" maxlength="100" placeholder="Tên của bạn"></label></div><div class="music-fields"><label>Nốt<select id="music-note">${Array.from({length:37},(_,i)=>`<option value="${48+i}">${musicNames[i%12]}${3+Math.floor(i/12)}</option>`).join('')}<option value="rest">Dấu lặng</option></select></label><label>Trường độ<select id="music-duration"><option value="1">Nốt đen · 1 phách</option><option value="0.5">Móc đơn · ½ phách</option><option value="2">Nốt trắng · 2 phách</option><option value="4">Nốt tròn · 4 phách</option></select></label><label>BPM<input id="music-score-bpm" type="number" min="40" max="240" value="80"></label></div><div class="music-keyboard-wrap"><div id="music-keyboard" class="music-keyboard" aria-label="Đàn piano hai quãng tám"></div></div><p id="music-current-note" class="music-muted" aria-live="polite">Chạm phím để chơi · Khi phát sheet, phím sáng theo từng nốt.</p><div class="music-actions"><button id="music-add-note">＋ Thêm nốt</button><button id="music-undo">↶ Bỏ nốt cuối</button><button id="music-play-score">▶ Nghe sheet</button><button id="music-stop">■ Dừng</button></div><div class="music-fields"><label>Nốt cần chỉnh<select id="music-edit-index" aria-label="Chọn nốt cần chỉnh"></select></label><button id="music-edit-note">Sửa bằng nốt &amp; trường độ đã chọn</button></div><p id="music-score-info" role="status"></p><div id="music-score-preview" class="music-score-preview"></div><div class="music-actions"><button id="music-print-score">In / lưu PDF</button><button id="music-blank">Giấy kẻ nhạc</button><button id="music-export">↓ Sao lưu sheet JSON</button><button id="music-import">↑ Mở sheet JSON</button><button id="music-import-midi">↓ Nhập MIDI → dựng sheet</button><button id="music-export-xml">↑ Xuất MusicXML</button><button id="music-print-lyrics">In lời & hợp âm đang mở</button></div><h3>Chưa có sheet? Nhận giai điệu từ âm thanh</h3><p class="music-muted">Chọn tệp hát/đàn một bè dưới 3 MB. Nhận tối đa 60 giây mỗi lần, theo BPM đã chọn; tạo sheet nháp để nghe và chỉnh. Nhạc phối nhiều nhạc cụ có thể nhận sai. Âm thanh xử lý trên máy.</p><label>Bắt đầu từ giây<input id="music-audio-start" type="number" min="0" max="3600" value="0"></label><button id="music-transcribe">↑ Chọn âm thanh &amp; tạo sheet nháp</button><h3>Tìm sheet từ các thư viện lớn</h3><p class="music-muted">Mở thư viện bên ngoài để tìm bản nhạc. Khả năng xem hoặc tải tùy từng bản; bản nhạc chưa được nhập vào Góc Hợp Âm.</p><div class="music-actions"><button data-sheet-source="musescore">MuseScore ↗</button><button data-sheet-source="imslp">IMSLP ↗</button><button data-sheet-source="musopen">Musopen ↗</button></div><p class="music-muted">Sheet là bản soạn riêng của bạn; công cụ không tự biến hợp âm bài hát thành tổng phổ.</p></section><section data-music-panel="practice" hidden><h3>Nhật ký luyện tập</h3><label>Mục tiêu, vòng hợp âm, ghi chú<textarea id="music-practice-notes" rows="6" maxlength="15000" placeholder="Hôm nay tập chuyển Am – F – C – G…"></textarea></label><div class="music-fields"><label>Số phút đã tập<input id="music-minutes" type="number" min="1" max="600" value="15"></label><button id="music-log">Lưu buổi tập</button></div><div id="music-session-list"></div><p class="music-muted">Bản soạn và ghi chú tự lưu trên thiết bị này. Xuất JSON để giữ bản soạn khi đổi máy. Không tự đăng lên mạng.</p></section><p id="music-message" role="status" aria-live="polite"></p><p class="music-byline">Dự án do NPT Duy phát triển.</p>`;
+ dialog.innerHTML=`<div class="music-head"><div><span class="music-kicker">GÓC HỢP ÂM · NPT DUY</span><h2 id="music-title">Studio bản phổ</h2></div><button data-music-close aria-label="Đóng công cụ">×</button></div><nav class="music-tabs" aria-label="Công cụ âm nhạc"><button data-music-tab="chords" aria-pressed="true">Hợp âm</button><button data-music-tab="score" aria-pressed="false">Sheet nhạc</button><button data-music-tab="practice" aria-pressed="false">Buổi tập</button></nav><section data-music-panel="chords"><p class="music-muted">12 giọng · 12 loại hợp âm · phát bằng âm tổng hợp trên thiết bị.</p><div class="music-fields"><label>Âm gốc<select id="music-root">${musicNames.map(n=>`<option>${n}</option>`).join('')}</select></label><label>Loại hợp âm<select id="music-quality">${Object.keys(musicQualities).map(q=>`<option value="${q}">${q||'Trưởng'}${q==='m'?' · thứ':''}</option>`).join('')}</select></label></div><div class="music-chord"><strong id="music-chord-name">C</strong><p id="music-tones"></p><div id="music-piano" aria-label="Các nốt của hợp âm"></div><button id="music-play-chord">▶ Nghe hợp âm</button></div><h3>Gam & vòng hòa âm</h3><p id="music-scale"></p><p id="music-progression"></p><button id="music-play-progression">▶ Nghe vòng I – vi – IV – V</button><p class="music-muted">Ký hiệu phím thăng (#); các nốt đồng âm có thể được viết khác trong bản nhạc.</p></section><section data-music-panel="score" hidden>${musicStudioPanel()}<div class="music-fields"><label>Tên bản soạn<input id="music-score-title" maxlength="100"></label><label>Người soạn<input id="music-score-author" maxlength="100" placeholder="Tên của bạn"></label></div><div class="music-fields"><label>Nốt<select id="music-note">${Array.from({length:37},(_,i)=>`<option value="${48+i}">${musicNames[i%12]}${3+Math.floor(i/12)}</option>`).join('')}<option value="rest">Dấu lặng</option></select></label><label>Trường độ<select id="music-duration"><option value="1">Nốt đen · 1 phách</option><option value="0.25">Móc kép · ¼ phách</option><option value="0.5">Móc đơn · ½ phách</option><option value="0.75">Móc đơn chấm · ¾ phách</option><option value="1.5">Nốt đen chấm · 1½ phách</option><option value="2">Nốt trắng · 2 phách</option><option value="3">Nốt trắng chấm · 3 phách</option><option value="4">Nốt tròn · 4 phách</option></select></label><label>BPM<input id="music-score-bpm" type="number" min="40" max="240" value="80"></label></div><div class="music-keyboard-wrap"><div id="music-keyboard" class="music-keyboard" aria-label="Đàn piano hai quãng tám"></div></div><p id="music-current-note" class="music-muted" aria-live="polite">Chạm phím để chơi · Khi phát sheet, phím sáng theo từng nốt.</p><div class="music-actions"><button id="music-add-note">＋ Thêm nốt</button><button id="music-undo">↶ Bỏ nốt cuối</button><button id="music-play-score">▶ Nghe sheet</button><button id="music-stop">■ Dừng</button></div><div class="music-fields"><label>Nốt cần chỉnh<select id="music-edit-index" aria-label="Chọn nốt cần chỉnh"></select></label><button id="music-edit-note">Sửa bằng nốt &amp; trường độ đã chọn</button></div><p id="music-score-info" role="status"></p><div id="music-score-preview" class="music-score-preview"></div><div class="music-actions"><button id="music-print-score">In / lưu PDF</button>${native?'':'<button id="music-download-pdf">Tải PDF</button>'}<button id="music-save-score">Lưu bản này</button><button id="music-blank">Giấy kẻ nhạc</button><button id="music-export">↓ Sao lưu sheet JSON</button>${native?'<button id="music-export-xml">Xuất MusicXML</button>':'<a class="music-download" id="music-export-xml" href="#" download="Goc_Hop_Am_Sheet.musicxml">Xuất MusicXML</a>'}<button id="music-import">↑ Mở sheet JSON</button><button id="music-print-lyrics">In lời & hợp âm đang mở</button></div><h3>Tìm sheet từ các thư viện lớn</h3><p class="music-muted">Mở thư viện bên ngoài để tìm bản nhạc. Khả năng xem hoặc tải tùy từng bản; bản nhạc chưa được nhập vào Góc Hợp Âm.</p><div class="music-actions"><button data-sheet-source="musescore">MuseScore ↗</button><button data-sheet-source="imslp">IMSLP ↗</button><button data-sheet-source="musopen">Musopen ↗</button></div><p class="music-muted">Bản nhập và bản nháp ở trên thiết bị này. Xuất PDF, MusicXML hoặc JSON để giữ bản riêng.</p></section><section data-music-panel="practice" hidden><h3>Nhật ký luyện tập</h3><label>Mục tiêu, vòng hợp âm, ghi chú<textarea id="music-practice-notes" rows="6" maxlength="15000" placeholder="Hôm nay tập chuyển Am – F – C – G…"></textarea></label><div class="music-fields"><label>Số phút đã tập<input id="music-minutes" type="number" min="1" max="600" value="15"></label><button id="music-log">Lưu buổi tập</button></div><div id="music-session-list"></div><p class="music-muted">Bản soạn và ghi chú tự lưu trên thiết bị này. Xuất JSON để giữ bản soạn khi đổi máy. Không tự đăng lên mạng.</p></section><p id="music-message" role="status" aria-live="polite"></p><p class="music-byline">Dự án do NPT Duy phát triển.</p>`;
  document.body.append(dialog);const el=id=>dialog.querySelector('#'+id);let audio,timers=[],picking=false;
- function message(text){el('music-message').textContent=text;toast(text)}
- function save(){try{localStorage.setItem('goc-music-workspace-v1',JSON.stringify(data))}catch{message('Chưa lưu được trên thiết bị. Hãy xuất JSON để giữ bản soạn.')}}
+ function message(text){
+  const inScore=dialog.querySelector('[data-music-tab="score"]').getAttribute('aria-pressed')==='true';
+  el('music-message').textContent=inScore?'':text;
+  el('music-job-status').textContent=inScore?text:'';
+  toast(text);
+ }
+ function save(){
+  const current=data.savedSheets.find(entry=>entry.id===data.activeSheet);
+  if(current)current.score=data.score;
+  try{localStorage.setItem('goc-music-workspace-v1',JSON.stringify(data));return true}
+  catch{message('Chưa lưu được trên thiết bị. Hãy xuất JSON để giữ bản soạn.');return false}
+ }
+ function rememberScore(){
+  if(!data.score.notes.length||data.activeSheet)return;
+  data.activeSheet=globalThis.crypto?.randomUUID?.()||Date.now()+'-'+Math.random().toString(36).slice(2);
+  data.savedSheets.push({id:data.activeSheet,score:data.score});
+ }
+ function useDraft(value,text){
+  const draft=cleanScore(value);
+  rememberScore();
+  data.activeSheet='';
+  data.score=draft;
+  rememberScore();
+  if(save())message(text+' Đã lưu trên thiết bị.');
+  score();
+ }
+ function sheetPicker(){
+  const picker=el('music-saved-sheets');
+  picker.replaceChildren();
+  for(const entry of [...data.savedSheets].reverse()){
+   const option=document.createElement('option');
+   option.value=entry.id;
+   option.textContent=entry.score.title;
+   picker.append(option);
+  }
+  if(data.activeSheet)picker.value=data.activeSheet;
+  picker.disabled=!picker.options.length;
+  el('music-open-saved').disabled=picker.disabled;
+ }
+ async function loadDraft(task){
+  if(picking)return;
+  picking=true;
+  for(const id of ['music-transcribe','music-import-midi','music-import-xml','music-import'])el(id).disabled=true;
+  try{await task()}catch(error){message(error.message)}
+  finally{
+   picking=false;
+   for(const id of ['music-transcribe','music-import-midi','music-import-xml','music-import'])el(id).disabled=false;
+  }
+ }
  function stop(){for(const timer of timers)clearTimeout(timer);timers=[];if(audio){audio.close().catch(()=>{});audio=null}dialog.querySelectorAll('.music-key.active').forEach(k=>k.classList.remove('active'))}
  async function context(){stop();audio=new (window.AudioContext||window.webkitAudioContext)();await audio.resume();return audio}
- function sound(ctx,midi,start,length=.7){if(midi===null)return;const osc=ctx.createOscillator(),gain=ctx.createGain();osc.type='triangle';osc.frequency.value=440*2**((midi-69)/12);gain.gain.setValueAtTime(0,start);gain.gain.linearRampToValueAtTime(.12,start+.02);gain.gain.exponentialRampToValueAtTime(.001,start+Math.max(.05,length));osc.connect(gain).connect(ctx.destination);osc.start(start);osc.stop(start+length+.03)}
+ function sound(ctx,midi,start,length=.7,timbre='triangle'){if(midi===null)return;const osc=ctx.createOscillator(),gain=ctx.createGain();osc.type=timbre;osc.frequency.value=440*2**((midi-69)/12);gain.gain.setValueAtTime(0,start);gain.gain.linearRampToValueAtTime(.12,start+.02);gain.gain.exponentialRampToValueAtTime(.001,start+Math.max(.05,length));osc.connect(gain).connect(ctx.destination);osc.start(start);osc.stop(start+length+.03)}
  function lightNote(midi){for(const key of dialog.querySelectorAll('.music-key'))key.classList.toggle('active',Number(key.dataset.midi)===midi);el('music-current-note').textContent=midi===null?'Dấu lặng':musicNames[midi%12]+(Math.floor(midi/12)-1)}
  let white=0;for(let midi=60;midi<=84;midi++){const pitch=midi%12,black=[1,3,6,8,10].includes(pitch),key=document.createElement('button');key.className='music-key '+(black?'is-black':'is-white');key.dataset.midi=midi;key.style.left=((black?white-.32:white)/15*100)+'%';key.style.width=((black?.64:1)/15*100)+'%';key.textContent=musicNames[pitch];key.setAttribute('aria-label',musicNames[pitch]+(Math.floor(midi/12)-1));if(!black)white++;key.onpointerdown=async event=>{event.preventDefault();try{if(!audio)await context();await audio.resume();sound(audio,midi,audio.currentTime,.65);lightNote(midi);el('music-note').value=String(midi)}catch{message('Chưa phát được tiếng đàn.')}};el('music-keyboard').append(key)}
  const sheetSources={musescore:'https://musescore.com/sheetmusic',imslp:'https://imslp.org/',musopen:'https://musopen.org/sheetmusic/'};
  for(const button of dialog.querySelectorAll('[data-sheet-source]'))button.onclick=()=>{const url=sheetSources[button.dataset.sheetSource];if(native)call('sheetSource',{source:button.dataset.sheetSource}).catch(error=>message(error.message));else window.open(url,'_blank','noopener')};
  function finish(ctx,seconds){timers.push(setTimeout(()=>{if(audio===ctx)stop()},(seconds+.3)*1000))}
  function chord(){const root=el('music-root').value,q=el('music-quality').value,notes=musicChord(root,q),classes=new Set(notes.map(n=>n%12));el('music-chord-name').textContent=root+q;el('music-tones').textContent=notes.map(n=>musicNames[n%12]).join(' · ');el('music-piano').innerHTML=musicNames.map((n,i)=>`<span class="${n.includes('#')?'black':'white'} ${classes.has(i)?'on':''}">${n}</span>`).join('');const r=musicNames.indexOf(root);el('music-scale').textContent='Gam trưởng: '+[0,2,4,5,7,9,11].map(n=>musicNames[(r+n)%12]).join(' – ');el('music-progression').textContent=[root,musicNames[(r+9)%12]+'m',musicNames[(r+5)%12],musicNames[(r+7)%12]].join(' → ')}
- function score(){const v=data.score;el('music-score-title').value=v.title;el('music-score-author').value=v.author;el('music-score-bpm').value=v.bpm;el('music-score-preview').innerHTML=scoreSvg(v);const beats=v.notes.reduce((s,n)=>s+n.beats,0);el('music-score-info').textContent=v.notes.length+'/128 nốt · ô nhịp '+(Math.floor(beats/4)+1)+' · còn '+(4-beats%4)+' phách';el('music-score-info').textContent+=' · '+(v.origin==='midi'?'MIDI (chưa xác minh)':v.origin==='audio'?'Audio nháp (chưa xác minh)':'Bản soạn thủ công');el('music-undo').disabled=!v.notes.length;el('music-edit-note').disabled=!v.notes.length;el('music-edit-index').innerHTML=v.notes.map((n,i)=>'<option value="'+i+'">'+(i+1)+'. '+(n.midi===null?'Lặng':musicNames[n.midi%12]+(Math.floor(n.midi/12)-1))+' · '+n.beats+' phách</option>').join('')}
- async function printHTML(body){const html='<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'"><title>Góc Hợp Âm · Sheet</title><style>@page{size:A4;margin:12mm}body{font:16px/1.7 Georgia,serif;color:#19151d}svg{width:100%;height:auto}pre{white-space:pre-wrap;font:inherit}small{font-family:sans-serif}h1{font-size:25px}</style></head><body>'+body+'</body></html>';
+ function score(){
+  const v=data.score;
+  el('music-score-title').value=v.title;
+  el('music-score-author').value=v.author;
+  el('music-score-bpm').value=v.bpm;
+  el('music-score-preview').innerHTML=scorePages(v).join('');
+  const beats=v.notes.reduce((sum,note)=>sum+note.beats,0);
+  el('music-score-info').textContent=(v.origin?musicOrigins[v.origin]+' · ':'')+v.notes.length+' nốt/dấu lặng · '+Math.ceil(beats/4)+' ô nhịp';
+  el('music-undo').disabled=el('music-edit-note').disabled=!v.notes.length;
+  el('music-edit-index').innerHTML=v.notes.map((n,i)=>'<option value="'+i+'">'+(i+1)+'. '+(n.midi===null?'Lặng':musicNames[n.midi%12]+(Math.floor(n.midi/12)-1))+' · '+n.beats+' phách</option>').join('');
+  sheetPicker();
+ }
+ async function printHTML(body){const html='<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'"><title>Góc Hợp Âm · Sheet</title><style>@page{size:A4;margin:12mm}body{font:16px/1.7 Georgia,serif;color:#19151d}svg{display:block;width:100%;height:auto;break-inside:avoid;page-break-inside:avoid}svg+svg{break-before:page;page-break-before:always}pre{white-space:pre-wrap;font:inherit}small{font-family:sans-serif}h1{font-size:25px}</style></head><body>'+body+'</body></html>';
   if(native){await call('printSheet',{html});return}const frame=document.createElement('iframe');frame.style.cssText='position:fixed;width:1px;height:1px;bottom:0;left:0;border:0';frame.srcdoc=html;frame.onload=()=>{frame.contentWindow.focus();frame.contentWindow.print();setTimeout(()=>frame.remove(),60000)};document.body.append(frame);
  }
  async function printLyrics(){const song=getSong();if(!song?.content){message('Mở bài hát trước rồi chọn in lời & hợp âm.');return}try{await printHTML('<h1>'+musicEscape(song.title)+'</h1><p>'+musicEscape(song.author||'')+'</p><pre>'+musicEscape(song.content)+'</pre><small>Góc Hợp Âm · NPT Duy</small>')}catch(error){message(error.message)}}
@@ -326,75 +877,251 @@ function createMusicTools({native=false,call=async()=>true,toast=()=>{},getSong=
  el('music-play-chord').onclick=async()=>{try{const ctx=await context();musicChord(el('music-root').value,el('music-quality').value).forEach((n,i)=>sound(ctx,n,ctx.currentTime+i*.035));finish(ctx,1)}catch{message('Chưa phát được âm thanh. Kiểm tra âm lượng thiết bị.')}};
  el('music-play-progression').onclick=async()=>{try{const ctx=await context(),r=musicNames.indexOf(el('music-root').value);[0,9,5,7].forEach((n,i)=>musicChord(musicNames[(r+n)%12],i===1?'m':'').forEach(note=>sound(ctx,note,ctx.currentTime+i*1.1,.9)));finish(ctx,4.5)}catch{message('Chưa phát được vòng hòa âm.')}};
  for(const id of ['music-score-title','music-score-author','music-score-bpm'])el(id).onchange=()=>{data.score=cleanScore({...data.score,title:el('music-score-title').value,author:el('music-score-author').value,bpm:Number(el('music-score-bpm').value)});save();score()};
- el('music-add-note').onclick=()=>{try{if(data.score.notes.length>=128)throw new Error('Bản soạn đã đủ 128 nốt.');const value=el('music-note').value,n={midi:value==='rest'?null:Number(value),beats:Number(el('music-duration').value)};data.score=cleanScore({...data.score,notes:[...data.score.notes,n]});save();score();el('music-message').textContent=''}catch(error){message(error.message)}};
+ el('music-add-note').onclick=()=>{try{if(data.score.notes.length>=sheetMaxNotes)throw new Error('Bản soạn đã đủ 1.024 nốt.');const value=el('music-note').value,n={midi:value==='rest'?null:Number(value),beats:Number(el('music-duration').value)};data.score=cleanScore({...data.score,notes:[...data.score.notes,n]});save();score();el('music-message').textContent=''}catch(error){message(error.message)}};
  el('music-edit-index').onchange=()=>{const n=data.score.notes[Number(el('music-edit-index').value)];if(n){el('music-note').value=n.midi===null?'rest':String(n.midi);el('music-duration').value=String(n.beats)}};
- el('music-edit-note').onclick=()=>{try{const i=Number(el('music-edit-index').value),notes=data.score.notes.map(n=>({...n})),value=el('music-note').value;if(!notes[i])return;notes[i]={midi:value==='rest'?null:Number(value),beats:Number(el('music-duration').value)};data.score=cleanScore({...data.score,notes});save();score();message('Đã chỉnh nốt '+(i+1)+'.')}catch(e){message(e.message)}};
- el('music-undo').onclick=()=>{data.score.notes.pop();save();score()};el('music-stop').onclick=stop;
- el('music-play-score').onclick=async()=>{if(!data.score.notes.length){message('Thêm nốt vào sheet trước.');return}try{const ctx=await context();let time=0;for(const n of data.score.notes){const length=n.beats*60/data.score.bpm;sound(ctx,n.midi,ctx.currentTime+time+.08,length*.9);const note=n.midi;timers.push(setTimeout(()=>lightNote(note),(time+.08)*1000));time+=length}finish(ctx,time+.08)}catch{message('Chưa phát được sheet.')}};
- el('music-print-score').onclick=()=>printHTML(scoreSvg(data.score)).catch(e=>message(e.message));el('music-blank').onclick=()=>printHTML(scoreSvg(data.score,true)).catch(e=>message(e.message));el('music-print-lyrics').onclick=printLyrics;
- el('music-export').onclick=async()=>{const text=JSON.stringify(data.score,null,2);try{if(native)await call('saveText',{text,name:'Goc_Hop_Am_Sheet.json'});else{const url=URL.createObjectURL(new Blob([text],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='Goc_Hop_Am_Sheet.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}}catch(e){message(e.message)}};
- el('music-transcribe').onclick=async()=>{picking=true;el('music-transcribe').disabled=true;try{const file=await readMusicAudio({native,call});if(!file)return;message('Đang đọc âm thanh trên thiết bị…');const ctx=await context();let decoded;try{decoded=await ctx.decodeAudioData(file.bytes)}catch{throw new Error('Thiết bị chưa đọc được tệp này. Thử WAV, MP3 hoặc M4A.')}const result=await transcribeMusicAudio(decoded,{bpm:data.score.bpm,start:Number(el('music-audio-start').value),onProgress(percent){el('music-message').textContent='Đang nhận nốt: '+percent+'%'}});localStorage.setItem('goc-score-previous',JSON.stringify(data.score));data.score=cleanScore({title:file.name,author:'',bpm:data.score.bpm,notes:result.notes,origin:'audio'});save();score();message('Đã tạo sheet nháp '+result.notes.length+' nốt/dấu lặng. Nghe lại và chỉnh; '+(result.limited?'đoạn dài đã được giới hạn 60 giây / 128 nốt.':'nhận diện có thể sai cao độ hoặc trường độ.'))}catch(error){message(error.message)}finally{picking=false;el('music-transcribe').disabled=false;stop()}};
-
- el('music-import-midi').onclick=async()=>{
-  picking=true;el('music-import-midi').disabled=true;
+ el('music-edit-note').onclick=()=>{try{const i=Number(el('music-edit-index').value),notes=data.score.notes.map(n=>({...n})),value=el('music-note').value;if(!notes[i])return;notes[i]={...notes[i],midi:value==='rest'?null:Number(value),beats:Number(el('music-duration').value)};data.score=cleanScore({...data.score,notes});save();score();message('Đã chỉnh nốt '+(i+1)+'.')}catch(e){message(e.message)}};
+ el('music-undo').onclick=()=>{data.score=cleanScore({...data.score,notes:data.score.notes.slice(0,-1)});save();score()};el('music-stop').onclick=stop;
+ el('music-play-score').onclick=async()=>{
+  if(!data.score.notes.length){message('Thêm nốt vào sheet trước.');return}
   try{
-   const file=await readMusicAudio({native,call});if(!file)return;
-   const parsed=midiToScore(file.bytes,{title:file.name||'Giai điệu MIDI'});
-   const draft=cleanScore(parsed);localStorage.setItem('goc-score-previous',JSON.stringify(data.score));
-   data.score=draft;save();score();
-   message('Đã lấy '+draft.notes.length+' nốt/dấu lặng từ MIDI, tempo '+draft.bpm+' BPM. Cần nghe và đối chiếu bản thu; chưa xác minh.');
-  }catch(error){message('Không thể dựng MIDI chính xác: '+error.message)}
-  finally{picking=false;el('music-import-midi').disabled=false}
- };
- el('music-export-xml').onclick=async()=>{
-  try{
-   const text=scoreToMusicXML(data.score),name='Goc_Hop_Am_Sheet.musicxml';
-   if(native)await call('saveText',{text,name});
-   else{
-    const url=URL.createObjectURL(new Blob([text],{type:'application/vnd.recordare.musicxml+xml'}));
-    const anchor=document.createElement('a');anchor.href=url;anchor.download=name;anchor.click();
-    setTimeout(()=>URL.revokeObjectURL(url),1000);
+   const ctx=await context(),base=ctx.currentTime+.08,score=data.score;
+   let time=0;
+   for(let i=0;i<score.notes.length;i++){
+    const note=score.notes[i];
+    let beats=note.beats;
+    while(score.notes[i].tie){beats+=score.notes[++i].beats}
+    const length=beats*60/score.bpm;
+    sound(ctx,note.midi,base+time,length*.92,score.origin==='organ-draft'?'sine':'triangle');
+    timers.push(setTimeout(()=>lightNote(note.midi),(time+.08)*1000));
+    time+=length;
    }
-   message('Đã chuẩn bị MusicXML từ nốt hiện có, chưa xác minh nguồn gốc bài hát.');
+   finish(ctx,time+.08);
+  }catch{message('Chưa phát được sheet.')}
+ };
+ el('music-print-score').onclick=()=>printHTML(scorePages(data.score).join('')).catch(e=>message(e.message));
+ el('music-blank').onclick=()=>printHTML(scoreSvg(data.score,true)).catch(e=>message(e.message));
+ el('music-print-lyrics').onclick=printLyrics;
+ function downloadScore(bytes,name,type){
+  const url=URL.createObjectURL(new Blob([bytes],{type}));
+  const link=document.createElement('a');
+  link.href=url;link.download=name;
+  document.body.append(link);link.click();link.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),60000);
+ }
+ async function exportScore(text,name,type){
+  if(native){await call('saveText',{text,name});return}
+  downloadScore(text,name,type);
+ }
+ if(!native)el('music-download-pdf').onclick=async()=>{
+  if(!data.score.notes.length){message('Thêm nốt vào sheet trước khi tải PDF.');return}
+  const button=el('music-download-pdf');
+  button.disabled=true;
+  try{
+   message('Đang kết xuất PDF trên thiết bị…');
+   const pages=scorePages(data.score);
+   const pdf=await sheetPdfFromSvg(pages);
+   downloadScore(pdf,'Goc_Hop_Am_Ban_Pho.pdf','application/pdf');
+   message('PDF A4 '+pages.length+' trang đã sẵn sàng.');
+  }catch(error){message(error.message||'Chưa xuất được PDF. Hãy thử In / lưu PDF.')}
+  finally{button.disabled=false}
+ };
+ el('music-save-score').onclick=()=>{
+  if(!data.score.notes.length){message('Thêm nốt trước khi lưu.');return}
+  rememberScore();
+  if(save())message('Đã lưu bản phổ trên thiết bị.');
+  sheetPicker();
+ };
+ el('music-open-saved').onclick=()=>{
+  const entry=data.savedSheets.find(item=>item.id===el('music-saved-sheets').value);
+  if(!entry)return;
+  rememberScore();
+  stop();
+  data.score=cleanScore(entry.score);
+  data.activeSheet=entry.id;
+  if(save())message('Đã mở bản phổ trên thiết bị.');
+  score();
+ };
+ el('music-export').onclick=()=>exportScore(JSON.stringify(data.score,null,2),'Goc_Hop_Am_Sheet.json','application/json').catch(e=>message(e.message));
+ const xmlExport=el('music-export-xml');
+ xmlExport.onclick=event=>{
+  const name='Goc_Hop_Am_Sheet.musicxml',type='application/vnd.recordare.musicxml+xml';
+  try{
+   const text=scoreMusicXml(data.score);
+   if(native){exportScore(text,name,type).catch(e=>message(e.message));return;}
+   if(xmlExport.href.startsWith('blob:'))URL.revokeObjectURL(xmlExport.href);
+   xmlExport.href=URL.createObjectURL(new Blob([text],{type}));
+  }catch(e){event.preventDefault();message(e.message)}
+ };
+ el('music-find-pdf').onclick=()=>{dialog.close();onFindPdf()};
+ for(const instrument of ['piano','organ'])el('music-make-'+instrument).onclick=()=>{
+  try{
+   stop();
+   const shift=getShift();
+   const draft=chordAccompaniment(getSong(),instrument,{transpose:symbol=>shift?transpose(symbol,shift):symbol,chord:musicChord,bpm:data.score.bpm});
+   useDraft(draft,'Đã tạo bè đệm '+instrument+'. Mỗi hợp âm một ô nhịp.');
   }catch(error){message(error.message)}
  };
- el('music-import').onclick=async()=>{picking=true;try{const text=await readMusicText({native,call});if(!text)return;const parsed=JSON.parse(text);if(parsed?.format!=='goc-score-1'||!Array.isArray(parsed.notes))throw new Error('Cần tệp sheet Góc Hợp Âm đã xuất.');const draft=cleanScore(parsed);localStorage.setItem('goc-score-previous',JSON.stringify(data.score));data.score=draft;save();score();message('Đã mở sheet của bạn.')}catch(e){message('Chưa mở được sheet: '+e.message)}finally{picking=false}};
+ el('music-import-midi').onclick=()=>loadDraft(async()=>{
+  const file=await readMusicAudio({native,call,kind:'midi'});
+  if(!file)return;
+  const draft=midiToSheet(file.bytes,file.name);
+  useDraft(draft,'Đã đọc MIDI · độ lệch lưới '+draft.maxError.toFixed(3).replace('.',',')+' phách.');
+ });
+ el('music-import-xml').onclick=()=>loadDraft(async()=>{
+  const file=await readMusicAudio({native,call,kind:'musicxml'});
+  if(!file)return;
+  const text=new TextDecoder('utf-8',{fatal:true}).decode(file.bytes);
+  useDraft(musicXmlToSheet(text,file.name),'Đã nhập MusicXML.');
+ });
+ el('music-transcribe').onclick=()=>loadDraft(async()=>{
+  const file=await readMusicAudio({native,call});
+  if(!file)return;
+  message('Đang đọc âm thanh trên thiết bị…');
+  const bpm=data.score.bpm, start=Number(el('music-audio-start').value);
+  const ctx=await context();
+  try{
+   let decoded;
+   try{decoded=await ctx.decodeAudioData(file.bytes)}
+   catch{throw new Error('Thiết bị chưa đọc được tệp này. Thử WAV, MP3 hoặc M4A.')}
+   const result=await transcribeMusicAudio(decoded,{bpm,start,onProgress(percent){el('music-job-status').textContent='Đang nhận nốt '+percent+'%'}});
+   useDraft({title:file.name,author:'',bpm,notes:result.notes,origin:'audio-draft'},'Đã tạo sheet nháp '+result.notes.length+' nốt/dấu lặng. '+(result.limited?'Đã giới hạn đoạn ở 60 giây hoặc 128 nốt.':'Nghe lại và đối chiếu.'));
+  }finally{stop()}
+ });
+ el('music-import').onclick=()=>loadDraft(async()=>{
+  const text=await readMusicText({native,call});
+  if(!text)return;
+  const parsed=JSON.parse(text);
+  if(parsed?.format!=='goc-score-1'||!Array.isArray(parsed.notes))throw new Error('Cần tệp sheet Góc Hợp Âm đã xuất.');
+  useDraft(parsed,'Đã mở tệp sheet JSON.');
+ });
  el('music-practice-notes').value=data.notes;el('music-practice-notes').oninput=()=>{data.notes=el('music-practice-notes').value;save()};el('music-log').onclick=()=>{const minutes=Math.round(Number(el('music-minutes').value));if(!Number.isFinite(minutes)||minutes<1||minutes>600){message('Nhập thời gian tập từ 1 đến 600 phút.');return}data.sessions.push({date:new Date().toISOString(),minutes});data.sessions=data.sessions.slice(-30);save();sessions();message('Đã lưu buổi tập trên thiết bị.')};
  document.addEventListener('visibilitychange',()=>{if(document.hidden&&!picking)stop()});el('music-quality').value='';el('music-note').value='60';chord();score();sessions();
- return {open(){dialog.showModal()},printLyrics,stop,get permissionPending(){return picking}};
+ return {
+  open(panel='score'){
+   const song=getSong();
+   el('music-source-song').textContent=song?.title?'Đang mở '+song.title:'Chọn PDF, MIDI, MusicXML hoặc audio để bắt đầu.';
+   dialog.querySelector('[data-music-tab="'+panel+'"]').click();
+   dialog.showModal();
+   dialog.scrollTop=0;
+  },
+  printLyrics,stop,get permissionPending(){return picking}
+ };
+}
+
+let sourcePdfLoader;
+function loadSheetPdf(){if(globalThis.GocPdf)return Promise.resolve(globalThis.GocPdf);if(sourcePdfLoader)return sourcePdfLoader;sourcePdfLoader=new Promise((resolve,reject)=>{const script=document.createElement('script');script.src=new URL('vendor/pdf-engine.js',document.querySelector('script[src*="bundle.js"]')?.src||new URL('/mobile/bundle.js',location.href)).href;script.onload=()=>globalThis.GocPdf?resolve(globalThis.GocPdf):reject(new Error('Chưa mở được bộ đọc PDF.'));script.onerror=()=>{sourcePdfLoader=null;reject(new Error('Chưa tải được bộ đọc bản phổ.'))};document.head.append(script)});return sourcePdfLoader}
+const defaultSheetPath=song=>song?.sourceUrl?'/api/song-sheet?'+new URLSearchParams({url:song.sourceUrl}):'';
+function createSongSheet({host,getSong,native=false,call=async()=>true,toast=()=>{},onShow=()=>{},getSheetPath=defaultSheetPath,rawPdf=false,onMetadata=()=>{}}){
+ const panel=document.createElement('section');panel.className='song-sheet';panel.hidden=true;panel.innerHTML='<div class="sheet-song-head"><strong>Bản phổ của bài đang mở</strong><button data-ss="close">Thu gọn bản phổ</button></div><p class="sheet-origin">Hiển thị tệp PDF từ bản phổ nguồn, giữ nguyên nốt, nhịp và dấu nghỉ. Tông của bản phổ có thể khác tông hợp âm bạn đang xem.</p><div class="ss-options"><label>Chọn bản phổ<select data-ss="files"></select></label></div><div class="ss-actions"><button data-ss="reload">↻ Tìm lại bản phổ</button><button data-ss="previous">← Trang trước</button><span data-ss="page"></span><button data-ss="next">Trang sau →</button><button data-ss="zoom-out">−</button><button data-ss="zoom-in">＋</button><button data-ss="pdf">PDF / In</button></div><p data-ss="status" role="status" aria-live="polite"></p><div class="ss-real-score"><canvas data-ss="canvas" aria-label="Trang bản phổ PDF"></canvas></div><p class="ss-source" data-ss="source"></p>';
+ host.prepend(panel);const q=name=>panel.querySelector('[data-ss="'+name+'"]');let song,documentPdf,pdfTask,page=1,zoom=1,ticket=0,renderTicket=0,rendering;
+ const path=()=>getSheetPath(song)+'&file='+encodeURIComponent(q('files').value||'0');
+ async function api(value){const result=native?await call('api',{path:value}):await fetch(value).then(async r=>{const data=await r.json();if(!r.ok)throw new Error(data.error||'Chưa đọc được bản phổ.');return data});if(result.error)throw new Error(result.error);return result}
+ function status(text){q('status').textContent=text}
+ function buttons(){q('previous').disabled=!documentPdf||page<=1;q('next').disabled=!documentPdf||page>=documentPdf.numPages;q('pdf').disabled=!documentPdf;q('page').textContent=documentPdf?'Trang '+page+' / '+documentPdf.numPages:''}
+ function clearPdf(){
+  ++renderTicket;rendering?.cancel();rendering=null;
+  pdfTask?.destroy().catch(()=>{});pdfTask=null;documentPdf=null;
+  q('canvas').width=1;q('canvas').height=1;buttons();
+ }
+ async function render(){
+  const pdf=documentPdf;if(!pdf)return;
+  const token=++renderTicket;rendering?.cancel();
+  try{
+   const current=await pdf.getPage(page);if(token!==renderTicket)return;
+   const base=current.getViewport({scale:1}),scale=Math.min(2,Math.max(.8,Math.min(1400,Math.max(700,host.clientWidth-30))/base.width))*zoom;
+   const viewport=current.getViewport({scale}),canvas=q('canvas');
+   canvas.style.width=(zoom*100)+'%';canvas.width=Math.floor(viewport.width);canvas.height=Math.floor(viewport.height);
+   rendering=current.render({canvasContext:canvas.getContext('2d'),viewport});await rendering.promise;
+   if(token!==renderTicket)return;
+   buttons();status('Bản phổ PDF nguồn · '+pdf.numPages+' trang · giữ nguyên ký hiệu trong tệp.');
+  }catch(e){if(token===renderTicket&&e.name!=='RenderingCancelledException')status('Chưa hiển thị được bản phổ. Có thể dùng nút PDF / In.')}
+ }
+ async function loadFile(){
+  if(!getSheetPath(song))return;
+  const token=++ticket,pdfPath=path();clearPdf();status('Đang đọc bản phổ thật của bài…');
+  try{
+   let bytes;
+   if(rawPdf){
+    const response=await fetch(pdfPath+'&download=1');
+    if(!response.ok||!response.headers.get('content-type')?.startsWith('application/pdf'))throw new Error('Chưa tải được bản PDF. Hãy thử lại hoặc mở trang nguồn.');
+    bytes=new Uint8Array(await response.arrayBuffer());if(token!==ticket)return;
+   }else{
+    const first=await api(pdfPath+'&part=0');if(token!==ticket)return;
+    if(!first.base64||!Number.isInteger(first.parts)||first.parts<1||first.parts>20||!Number.isInteger(first.totalBytes)||first.totalBytes<1||first.totalBytes>8000000)throw new Error('Chưa nhận được tệp PDF đầy đủ.');
+    bytes=new Uint8Array(first.totalBytes);let offset=0;
+    for(let part=0;part<first.parts;part++){
+     const chunk=part===0?first:await api(pdfPath+'&part='+part);if(token!==ticket)return;
+     const data=atob(chunk.base64);
+     if(chunk.part!==part||chunk.parts!==first.parts||chunk.totalBytes!==first.totalBytes||offset+data.length>bytes.length)throw new Error('Tệp PDF tải về không nhất quán.');
+     for(let i=0;i<data.length;i++)bytes[offset++]=data.charCodeAt(i);
+     status('Đang tải bản phổ: '+Math.round((part+1)/first.parts*100)+'%');
+    }
+    if(offset!==bytes.length)throw new Error('Tệp PDF chưa tải đủ.');
+   }
+   const engine=await loadSheetPdf();if(token!==ticket)return;
+   pdfTask=engine.getDocument({data:bytes,isEvalSupported:false,useWasm:false,useSystemFonts:true,disableAutoFetch:true});
+   const pdf=await pdfTask.promise;
+   if(token!==ticket)return;
+   documentPdf=pdf;page=1;buttons();await render();
+  }catch(error){if(token===ticket)status(error.message)}
+ }
+ async function load(){
+  song=getSong();const token=++ticket;clearPdf();q('files').replaceChildren();q('source').textContent='';
+  if(!getSheetPath(song)){status('Chưa có liên kết bài hát để tìm bản phổ.');return}
+  if(song?.sourceUrl?.startsWith('goc-song:')){status('Bài trong kho riêng chưa có bản phổ được gắn.');return}
+  if(globalThis.navigator?.onLine===false){status('Tra bản phổ PDF cần mạng. Lời và hợp âm đã tải vẫn mở được.');return}
+  status('Đang tìm bản phổ đã có của bài…');
+  try{
+   const meta=await api(getSheetPath(song));if(token!==ticket)return;
+   onMetadata(meta);
+   for(const file of meta.files||[]){const option=document.createElement('option');option.value=file.index;option.textContent=file.name;q('files').append(option)}
+   q('source').textContent=meta.credit||(meta.available?'Nguồn bản phổ: Hợp Âm Việt · tác giả và người chép giữ nguyên trong PDF. Góc Hợp Âm · NPT Duy.':'');
+   if(!meta.available){status(meta.reason||'Chưa có bản phổ của bài này. Không đủ dữ liệu để tự tạo đúng nốt và nhịp nghỉ.');return}
+   await loadFile();
+  }catch(error){if(token===ticket)status(error.message)}
+ }
+ q('close').onclick=()=>{panel.hidden=true;onShow(false)};q('reload').onclick=load;q('files').onchange=loadFile;q('previous').onclick=()=>{if(page>1){page--;render()}};q('next').onclick=()=>{if(documentPdf&&page<documentPdf.numPages){page++;render()}};q('zoom-in').onclick=()=>{zoom=Math.min(2,zoom+.2);render()};q('zoom-out').onclick=()=>{zoom=Math.max(.6,zoom-.2);render()};q('pdf').onclick=()=>{const pdfPath=path()+'&download=1';if(native)call('sheetExternal',{path:pdfPath}).catch(e=>toast(e.message));else window.open(pdfPath,'_blank','noopener')};buttons();
+ return {setSong(){++ticket;clearPdf();song=null;panel.hidden=true;onShow(false)},open(){panel.hidden=false;onShow(true);panel.scrollIntoView({block:'start'});if(documentPdf)render();else load()},stop(){},refresh(){},highlightLine(){},get isOpen(){return !panel.hidden}};
 }
 
 const $=id=>document.getElementById(id),pending=new Map();let seq=0;
 const native=!!(window.GocAndroid||window.webkit?.messageHandlers?.goc);
-const SITES_HOME='https://goc-hop-am.onwardcrust.chatgpt.site';let searchRequested=false;
-function openSiteSearch(q=''){return call('siteOpen',{q:String(q||'').slice(0,120)})}
 window.GocNativeReply=(id,ok,data)=>{const p=pending.get(id);if(!p)return;clearTimeout(p.timer);pending.delete(id);ok?p.resolve(data):p.reject(new Error(String(data||'Chưa thực hiện được.')))};
 let metroTimer,metroAudio,metroBeat=0;
 function stopWebMetro(){clearInterval(metroTimer);metroTimer=null;metroAudio?.close();metroAudio=null}
 function webMetro(bpm,beats){stopWebMetro();metroAudio=new (window.AudioContext||window.webkitAudioContext)();metroBeat=0;const tick=()=>{const oscillator=metroAudio.createOscillator(),gain=metroAudio.createGain();oscillator.frequency.value=metroBeat===0?1100:740;gain.gain.setValueAtTime(.22,metroAudio.currentTime);gain.gain.exponentialRampToValueAtTime(.001,metroAudio.currentTime+.055);oscillator.connect(gain).connect(metroAudio.destination);oscillator.start();oscillator.stop(metroAudio.currentTime+.06);window.GocNativeBeat(metroBeat);metroBeat=(metroBeat+1)%beats};tick();metroTimer=setInterval(tick,60000/bpm)}
 function call(action,args={}){
  if(!native){
-  if(action==='api')return fetch(args.path,{credentials:'omit',headers:{Accept:'application/json'}}).then(async r=>{const data=await r.json();if(!r.ok)throw new Error(data.error||'Kho bài chưa phản hồi.');return data});
+  if(action==='api'){
+   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),22000);
+   return fetch(args.path,{credentials:'omit',headers:{Accept:'application/json'},signal:controller.signal})
+    .then(async r=>{const data=await r.json();if(!r.ok)throw new Error(data.error||'Kho bài chưa phản hồi.');return data})
+    .catch(error=>{
+     if(error.name==='AbortError')throw new Error('Kho trực tuyến phản hồi quá lâu.');
+     if(error instanceof TypeError)throw new Error('Chưa kết nối được kho trực tuyến.');
+     throw error;
+    })
+    .finally(()=>clearTimeout(timer));
+  }
   if(action==='settingsLoad')return Promise.resolve(localStorage.getItem('goc-follow-v2')||'{}');
   if(action==='settingsSave'){localStorage.setItem('goc-follow-v2',args.value);return Promise.resolve(true)}
   if(action==='speechStop')return Promise.resolve(true);
-  if(action==='load')return Promise.resolve(localStorage.getItem('goc-mobile-offline')||'{}');
-  if(action==='save'){try{localStorage.setItem('goc-mobile-offline',args.value);return Promise.resolve(true)}catch{return Promise.reject(new Error('Thiết bị không còn đủ chỗ lưu.'))}}
+  if(action==='load'){try{return Promise.resolve(localStorage.getItem(offlineSongStorageKey)||'{}')}catch(error){return Promise.reject(error)}}
+  if(action==='save'){try{localStorage.setItem(offlineSongStorageKey,args.value);return Promise.resolve(true)}catch{return Promise.reject(new Error('Thiết bị không còn đủ chỗ lưu.'))}}
   if(action==='metronome'){try{args.running?webMetro(args.bpm,args.beats):stopWebMetro();return Promise.resolve(true)}catch{return Promise.reject(new Error('Chưa phát được nhịp. Hãy kiểm tra âm lượng.'))}}
-  if(action==='siteOpen'){window.open(SITES_HOME+'/?q='+encodeURIComponent(String(args.q||'')),'_blank','noopener');return Promise.resolve(true)}
-  if(action==='help'){window.open(SITES_HOME+'/huong-dan','_blank','noopener');return Promise.resolve(true)}
+  if(action==='help'){window.open('https://gochopam.pages.dev/huong-dan','_blank','noopener');return Promise.resolve(true)}
   if(action==='share')return navigator.share?navigator.share({title:args.title,text:args.text,url:args.url}):Promise.reject(new Error('Thiết bị chưa hỗ trợ chia sẻ.'));
   return Promise.resolve(true);
  }
  return new Promise((resolve,reject)=>{const id=String(++seq),timer=setTimeout(()=>{pending.delete(id);reject(new Error('Yêu cầu quá lâu. Hãy kiểm tra mạng rồi thử lại.'))},(['recordPermission','recordScreenStart','recordStart','speechStart','readText','readAudio','saveText','printSheet'].includes(action)?180000:25000));pending.set(id,{resolve,reject,timer});const message={id,action,args};try{window.GocAndroid?window.GocAndroid.postMessage(JSON.stringify(message)):window.webkit.messageHandlers.goc.postMessage(message)}catch(error){clearTimeout(timer);pending.delete(id);reject(error)}});
 }
-let offline=Object.create(null),current=null,shift=0,font=20,request=0,opening=0,page=0,hasMore=false,mode='home',tab='library',scrollFrame=0,scrollTime=0,scrollCarry=0,metroRunning=false;
+let offline=Object.create(null),offlineWritable=false,savingOffline=false,current=null,shift=0,font=20,request=0,opening=0,page=0,hasMore=false,mode='home',tab='library',scrollFrame=0,scrollTime=0,scrollCarry=0,metroRunning=false;
 let currentVideo=null,videoRequest=0;
 function videoChoices(){const select=$('video-choices');select.replaceChildren();for(const entry of videoList(current||{})){const option=document.createElement('option');option.value=entry.id;option.textContent=entry.label;select.append(option)}select.hidden=!select.options.length;}
 function clearVideoUI(){currentVideo=null;$('video-mount').replaceChildren();$('video-mount').hidden=true;$('video-close').hidden=true;$('video-external').hidden=true;$('video-status').textContent='';}
 function closeVideo(){++videoRequest;clearVideoUI();if(native)call('videoClose').catch(()=>{});}
 window.GocVideoClosed=clearVideoUI;
-async function playVideo(value){const id=videoId(value);if(!id){$('video-status').textContent='Hãy nhập liên kết YouTube hợp lệ.';return}const token=++videoRequest;currentVideo=id;if(metroRunning){metroRunning=false;updateMetro()}$('video-tools').hidden=false;$('video-status').textContent='Đang mở YouTube…';try{
+async function playVideo(value){const id=videoId(value);if(!id){$('video-status').textContent='Hãy nhập liên kết YouTube hợp lệ.';return}const token=++videoRequest;currentVideo=id;songSheet.stop();if(metroRunning){metroRunning=false;updateMetro()}$('video-tools').hidden=false;$('video-status').textContent='Đang mở YouTube…';try{
  if(native){await call('video',{id});if(token!==videoRequest)return;$('video-status').textContent='YouTube · cần mạng';}
  else{const frame=document.createElement('iframe');frame.title='YouTube · '+(current?.title||'Góc Hợp Âm');frame.src='player.html?id='+encodeURIComponent(id);frame.allow='autoplay; encrypted-media; picture-in-picture';frame.referrerPolicy='strict-origin-when-cross-origin';$('video-mount').replaceChildren(frame);$('video-mount').hidden=false;$('video-status').textContent='YouTube · cần mạng';}
  $('video-close').hidden=false;$('video-external').hidden=false;follow.videoReady();
@@ -402,16 +1129,78 @@ async function playVideo(value){const id=videoId(value);if(!id){$('video-status'
 async function listen(){if(!current)return;const token=opening,videoToken=++videoRequest;$('video-tools').hidden=false;let videos=videoList(current);if(!videos.length){$('video-status').textContent='Đang tìm bản thu của bài…';try{const data=await call('api',{path:'/api/reader?'+new URLSearchParams({url:current.sourceUrl})});if(token!==opening||videoToken!==videoRequest||!current)return;current={...current,videos:videoList(data.song||{})};videos=videoList(current);}catch{if(token!==opening||videoToken!==videoRequest)return;}}
  if(token!==opening||videoToken!==videoRequest||!current)return;videoChoices();if(videos.length)playVideo(videos[0].id);else $('video-status').textContent='Chưa có bản thu gợi ý. Bạn có thể dán liên kết YouTube bên dưới.';}
 function toast(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toast.timer);toast.timer=setTimeout(()=>$('toast').hidden=true,3500)}
-function cards(container,items,saved=false){container.replaceChildren();items.forEach((s,index)=>{const button=document.createElement('button');button.className='song';const number=document.createElement('span');number.className='number';number.textContent=saved?'♡':String(index+1+page*20).padStart(2,'0');const meta=document.createElement('span');meta.className='meta';const title=document.createElement('strong');title.textContent=s.title;const author=document.createElement('small');author.textContent=s.author||s.singer||'Lời & hợp âm';meta.append(title,author);const arrow=document.createElement('span');arrow.className='arrow';arrow.textContent='›';button.append(number,meta,arrow);button.addEventListener('click',()=>openSong(s.sourceUrl||s.url));container.append(button)})}
-function refreshSaved(){const items=Object.values(offline).sort((a,b)=>b.savedAt-a.savedAt);cards($('saved-songs'),items,true);$('saved-empty').hidden=items.length>0;$('storage-info').textContent=`${items.length}/100 bài · ${(libraryBytes(offline)/1024).toFixed(0)} KB trên thiết bị này.`}
-async function loadCatalog(){const id=++request;$('songs').replaceChildren();$('status').textContent='Đang tìm giai điệu…';$('previous').hidden=true;$('more').hidden=true;const q=$('query').value.trim(),params=new URLSearchParams({mode,page:String(page),type:$('type').value});if(q)params.set('q',q);else if($('genre').value)params.set('genre',$('genre').value);$('list-title').textContent=q?'Kết quả tìm kiếm':mode==='latest'?'Mới cập nhật':'Khám phá hôm nay';try{const data=await call('api',{path:'/api/catalog?'+params});if(id!==request)return;const items=catalogItems(data);cards($('songs'),items);hasMore=!!(data.hasMore??data.data?.hasMore);$('status').textContent=items.length?(data.stale?'Đang hiển thị bản lưu gần nhất.':''):'Chưa tìm thấy bài. Hãy thử tên ngắn hơn hoặc đổi cách tìm.';$('previous').hidden=page===0;$('more').hidden=!hasMore}catch(error){if(id!==request)return;$('songs').replaceChildren();$('status').textContent='Không truy xuất được dữ liệu từ Sites: '+error.message+'. Bấm Mở kho bài Góc Hợp Âm để tìm trực tiếp.';if(searchRequested)openSiteSearch(q).catch(e=>toast(e.message))}}
-function lyrics(){const pre=$('lyrics');pre.replaceChildren();if(!current)return;current.content.split('\n').forEach((text,index)=>{const row=document.createElement('span');row.className='lyric-line';row.dataset.line=index;row.tabIndex=0;const matcher=/\[([A-G](?:#|b)?[^\]\n]{0,24})\]/g;let start=0,match;while((match=matcher.exec(text))){row.append(document.createTextNode(text.slice(start,match.index)));const span=document.createElement('span');span.className='chord';span.textContent='['+transpose(match[1],shift)+']';row.append(span);start=matcher.lastIndex}row.append(document.createTextNode(text.slice(start)||' '));row.addEventListener('click',()=>follow.select(index));pre.append(row)});$('key').textContent=transpose(current.key||'C',shift);$('lyrics').style.setProperty('--font',font+'px');$('font-size').textContent=font+'px'}
-function saveLabel(){const saved=current&&offline[songUrl(current.sourceUrl)];$('save-song').textContent=saved?'Đã lưu · Bỏ lưu':'Lưu ngoại tuyến';$('save-song').disabled=!current}
-async function openSong(value){const url=songUrl(value);if(!url)return;const id=++opening;closeVideo();$('video-tools').hidden=true;current=null;shift=0;stopScroll();$('reader-title').textContent='Đang mở bài…';$('reader-author').textContent='';$('lyrics').replaceChildren();$('credit').textContent='';$('reader-status').textContent='';saveLabel();if(!$('reader').open)$('reader').showModal();$('reader-body').scrollTop=0;try{let song=offline[url];if(!song){const data=await call('api',{path:'/api/reader?'+new URLSearchParams(url.startsWith('site:')?{id:url.slice(5)}:{url})});song=readerSong(data)}if(id!==opening||!$('reader').open)return;if(!validSong(song))throw new Error('Bài hát chưa có nội dung hợp lệ.');current=song;follow.onSong(song);document.body.classList.add('reader-open');videoChoices();$('reader-title').textContent=song.title;$('reader-author').textContent=song.author||'Lời & hợp âm';$('reader-status').textContent=offline[url]?'Bản ngoại tuyến trên thiết bị.':'';$('credit').textContent='Sáng tác: '+(song.author||'Chưa có thông tin')+'. Hợp âm dùng để tham khảo và luyện tập.';lyrics();saveLabel();call('awake',{enabled:true}).catch(()=>{})}catch(error){if(id!==opening)return;$('reader-title').textContent='Chưa mở được bài';$('reader-status').textContent=error.message+' · Bài này có thể mở trong kho Sites.';openSiteSearch($('query').value).catch(()=>{})}}
-async function toggleSaved(){if(!current)return;const url=songUrl(current.sourceUrl),draft={...offline};if(draft[url])delete draft[url];else{if(Object.keys(draft).length>=100){toast('Đã đủ 100 bài. Bỏ lưu một bài để thêm bài mới.');return}draft[url]={...current,savedAt:Date.now()}}const sanitized=offlineLibrary(draft);if(libraryBytes(sanitized)>2000000){toast('Thư viện đã đầy. Hãy bỏ lưu một số bài.');return}$('save-song').disabled=true;try{await call('save',{value:JSON.stringify(sanitized)});offline=sanitized;refreshSaved();saveLabel();toast(offline[url]?'Đã lưu. Bài này mở được khi mất mạng.':'Đã bỏ lưu bài trên thiết bị.')}catch(error){toast(error.message);saveLabel()}}
+function cards(container,items,saved=false){container.replaceChildren();items.forEach((s,index)=>{const ref=s.sourceUrl||s.url;const button=document.createElement('button');button.className='song';const number=document.createElement('span');number.className='number';number.textContent=saved?'♡':String(index+1+page*20).padStart(2,'0');const meta=document.createElement('span');meta.className='meta';const title=document.createElement('strong');title.textContent=s.title;const author=document.createElement('small');author.textContent=s.author||s.singer||'Lời & hợp âm';meta.append(title,author);const arrow=document.createElement('span');arrow.className='arrow';arrow.textContent='›';button.append(number,meta,arrow);button.addEventListener('click',()=>openSong(ref,s));const row=document.createElement('div');row.className='song-row';const sheet=document.createElement('button');sheet.className='song-sheet-launch';sheet.textContent='▤ Sheet';sheet.setAttribute('aria-label','Xem bản phổ '+s.title);sheet.addEventListener('click',()=>openSong(ref,s).then(()=>{if(current?.sourceUrl===ref)songSheet.open()}));row.append(button,sheet);container.append(row)})}
+function refreshSaved(){const items=findOfflineSongs(offline);cards($('saved-songs'),items,true);$('saved-empty').hidden=items.length>0;$('storage-info').textContent=`${items.length}/${offlineSongLimit} bài · ${(libraryBytes(offline)/1024).toFixed(0)} KB trên thiết bị này.`}
+async function loadCatalog(){
+ const id=++request;
+ $('songs').replaceChildren();$('status').textContent='Đang tìm giai điệu…';$('previous').hidden=true;$('more').hidden=true;
+ const q=$('query').value.trim(),type=$('type').value,params=new URLSearchParams({mode,page:String(page),type});
+ if(q)params.set('q',q);else if($('genre').value)params.set('genre',$('genre').value);
+ $('list-title').textContent=mode==='sheets'?'Kho bản phổ':q?'Kết quả tìm kiếm':mode==='latest'?'Mới cập nhật':'Khám phá hôm nay';
+ await offlineReady;
+ if(id!==request)return;
+ const saved=page===0&&mode!=='sheets'&&(q||!$('genre').value)?findOfflineSongs(offline,{q,type}):[];
+ if(navigator.onLine===false){
+  cards($('songs'),saved,true);hasMore=false;$('previous').hidden=page===0;
+  $('status').textContent=saved.length?'Ngoại tuyến · Bài đã tải trên thiết bị.':mode==='sheets'?'Tra bản phổ cần kết nối mạng.':'Chưa tìm thấy bài đã tải. Bài chưa lưu cần kết nối mạng.';
+  return;
+ }
+ if(q&&saved.length){cards($('songs'),saved,true);$('status').textContent='Bài đã tải trên thiết bị · Đang tra thêm trực tuyến…';}
+ try{
+  const data=await call('api',{path:mode==='sheets'?'/api/song-sheet?list=1&page='+page:'/api/catalog?'+params});
+  if(id!==request)return;
+  const online=catalogItems(data),downloaded=new Set(saved.map(song=>songReferenceId(song.sourceUrl)));
+  const items=q&&page===0?[...saved,...online.filter(song=>!downloaded.has(songReferenceId(song.url)))]:online;
+  cards($('songs'),items);hasMore=!!data.hasMore;
+  let status='';
+  if(!items.length)status='Chưa tìm thấy bài. Hãy thử tên ngắn hơn hoặc đổi cách tìm.';
+  else if(data.fallback==='unavailable')status='Kho trực tuyến chưa phản hồi. Đang hiển thị bài phù hợp trong dữ liệu đã lưu.';
+  else if(data.fallback==='nearby')status='Bài phù hợp hoặc gần đúng trong dữ liệu đã lưu.';
+  else if(data.stale)status='Đang hiển thị bản lưu gần nhất.';
+  else if(!online.length)status='Kết quả từ bài đã tải trên thiết bị.';
+  $('status').textContent=status;
+  $('previous').hidden=page===0;$('more').hidden=!hasMore;
+ }catch(error){
+  if(id!==request)return;
+  cards($('songs'),saved,true);hasMore=false;$('previous').hidden=page===0;
+  $('status').textContent=saved.length?'Kho trực tuyến chưa phản hồi · Đang dùng bài đã tải trên thiết bị.':error.message+' Bài chưa tải cần mạng. Bài đã tải mở được trong mục Đã lưu.';
+ }
+}
+function lyrics(){songSheet.refresh();follow.refresh();const pre=$('lyrics');pre.replaceChildren();if(!current)return;current.content.split('\n').forEach((text,index)=>{const row=document.createElement('span');row.className='lyric-line';row.dataset.line=index;row.tabIndex=0;const matcher=/\[([A-G](?:#|b)?[^\]\n]{0,24})\]/g;let start=0,match;while((match=matcher.exec(text))){row.append(document.createTextNode(text.slice(start,match.index)));const span=document.createElement('span');span.className='chord';span.textContent='['+transpose(match[1],shift)+']';row.append(span);start=matcher.lastIndex}row.append(document.createTextNode(text.slice(start)||' '));row.addEventListener('click',()=>follow.select(index));pre.append(row)});$('key').textContent=transpose(current.key||'C',shift);$('lyrics').style.setProperty('--font',font+'px');$('font-size').textContent=font+'px'}
+function saveLabel(){const saved=current&&offline[songUrl(current.sourceUrl)];$('save-song').textContent=saved?'Đã lưu · Bỏ lưu':'Lưu ngoại tuyến';$('save-song').disabled=!current||savingOffline}
+async function openSong(value,summary={}){
+ const url=songUrl(value);if(!url)return;const id=++opening;
+ closeVideo();$('video-tools').hidden=true;current=null;shift=0;stopScroll();songSheet.setSong();
+ $('reader-title').textContent='Đang mở bài…';$('reader-author').textContent='';$('lyrics').replaceChildren();$('credit').textContent='';$('reader-status').textContent='';saveLabel();
+ if(!$('reader').open)$('reader').showModal();$('reader-body').scrollTop=0;
+ try{
+  await offlineReady;
+  if(id!==opening||!$('reader').open)return;
+  const saved=offline[url];
+  if(!saved&&navigator.onLine===false)throw new Error('Bài này chưa tải. Hãy kết nối mạng để mở.');
+  const song=saved||(await call('api',{path:songReaderPath(url)})).song;
+  if(id!==opening||!$('reader').open)return;
+  if(!validSong(song)||songUrl(song.sourceUrl)!==url)throw new Error('Bài hát chưa có nội dung hợp lệ.');
+  current={...song,singer:song.singer||summary.singer||''};
+  songSheet.setSong();follow.onSong(current);document.body.classList.add('reader-open');videoChoices();
+  $('reader-title').textContent=song.title;$('reader-author').textContent=song.author||'Lời & hợp âm';$('reader-status').textContent=saved?'Bản ngoại tuyến trên thiết bị.':'';
+  $('credit').textContent='Sáng tác: '+(song.author||'Chưa có thông tin')+'. Hợp âm dùng để tham khảo và luyện tập.';
+  lyrics();saveLabel();call('awake',{enabled:true}).catch(()=>{});
+ }catch(error){if(id!==opening)return;$('reader-title').textContent='Chưa mở được bài';$('reader-status').textContent=error.message}
+}
+async function toggleSaved(){
+ const song=current;if(!song||savingOffline)return;
+ const url=songUrl(song.sourceUrl);savingOffline=true;saveLabel();
+ try{
+  if(!offlineWritable)throw new Error('Chưa đọc được thư viện cũ. Hãy mở lại ứng dụng rồi thử lại.');
+  const next=native?toggleOfflineSong(offline,song):await updateWebOfflineSong(song,localStorage,navigator.locks);
+  if(native)await call('save',{value:JSON.stringify(next)});
+  offline=next;refreshSaved();toast(offline[url]?'Đã lưu. Bài này mở được khi mất mạng.':'Đã bỏ lưu bài trên thiết bị.');
+ }catch(error){toast(error.message)}finally{savingOffline=false;saveLabel()}
+}
 function stopScroll(){cancelAnimationFrame(scrollFrame);scrollFrame=0;scrollTime=0;scrollCarry=0;$('scroll').setAttribute('aria-pressed','false');$('scroll').textContent='▶ Cuộn đều'}
 function scrollStep(time){if(!scrollFrame)return;if(scrollTime){scrollCarry+=(time-scrollTime)/1000*Number($('scroll-speed').value);const pixels=Math.floor(scrollCarry);if(pixels){$('reader-body').scrollTop+=pixels;scrollCarry-=pixels}}scrollTime=time;if($('reader-body').scrollTop+$('reader-body').clientHeight>=$('reader-body').scrollHeight-1){stopScroll();return}scrollFrame=requestAnimationFrame(scrollStep)}
-function closeReader(){++opening;follow.stop();document.body.classList.remove('reader-open');$('reader-options').open=false;closeVideo();stopScroll();call('awake',{enabled:metroRunning}).catch(()=>{});if($('reader').open)$('reader').close()}
+function closeReader(){songSheet.stop();++opening;follow.stop();document.body.classList.remove('reader-open');$('reader-options').open=false;closeVideo();stopScroll();call('awake',{enabled:metroRunning}).catch(()=>{});if($('reader').open)$('reader').close()}
 window.GocBack=()=>{if($('reader').open){closeReader();return true}if(tab!=='library'){showTab('library');return true}return false};
 function showTab(id){tab=id;document.querySelectorAll('.screen').forEach(el=>el.hidden=el.id!==id);document.querySelectorAll('[data-tab]').forEach(el=>{el.dataset.tab===id?el.setAttribute('aria-current','page'):el.removeAttribute('aria-current')});window.scrollTo(0,0);if(id==='saved'||id==='about')refreshSaved()}
 function beatLights(){const wrap=$('beat-lights');wrap.replaceChildren();for(let i=0;i<Number($('beats').value);i++)wrap.append(document.createElement('span'))}
@@ -419,9 +1208,9 @@ window.GocNativeBeat=beat=>{[...$('beat-lights').children].forEach((el,index)=>e
 function metroLabel(){ $('metro-toggle').textContent=metroRunning?'■ Dừng nhịp':'▶ Bắt đầu';$('metro-toggle').setAttribute('aria-pressed',String(metroRunning));if(!metroRunning)beatLights()}
 async function updateMetro(){const bpm=bpmValue($('bpm').value);$('bpm').value=bpm;$('bpm-output').textContent=bpm;try{await call('metronome',{running:metroRunning,bpm,beats:Number($('beats').value)});call('awake',{enabled:metroRunning||$('reader').open}).catch(()=>{});metroLabel()}catch(error){metroRunning=false;metroLabel();toast(error.message)}}
 document.querySelectorAll('[data-tab]').forEach(el=>el.addEventListener('click',()=>showTab(el.dataset.tab)));
-$('search').addEventListener('submit',e=>{e.preventDefault();searchRequested=true;page=0;mode='hot';$('query').blur();loadCatalog()});
-$('site-search').addEventListener('click',()=>openSiteSearch($('query').value).catch(e=>toast(e.message)));
+$('search').addEventListener('submit',e=>{e.preventDefault();page=0;mode='hot';$('query').blur();loadCatalog()});
 $('genre').addEventListener('change',()=>{$('query').value='';page=0;mode='hot';loadCatalog()});$('type').addEventListener('change',()=>{if($('query').value.trim()){page=0;loadCatalog()}});
+$('sheet-catalog').addEventListener('click',()=>{$('query').value='';$('genre').value='';mode='sheets';page=0;loadCatalog()});
 $('latest').addEventListener('click',()=>{$('query').value='';$('genre').value='';mode='latest';page=0;loadCatalog()});
 $('more').addEventListener('click',()=>{if(hasMore){page++;loadCatalog()}});$('previous').addEventListener('click',()=>{if(page){page--;loadCatalog()}});
 $('close-reader').addEventListener('click',closeReader);$('reader').addEventListener('cancel',e=>{e.preventDefault();closeReader()});$('save-song').addEventListener('click',toggleSaved);
@@ -429,16 +1218,24 @@ $('listen').addEventListener('click',listen);$('video-close').addEventListener('
 $('tone-down').addEventListener('click',()=>{if(current){shift--;lyrics()}});$('tone-up').addEventListener('click',()=>{if(current){shift++;lyrics()}});$('tone-reset').addEventListener('click',()=>{shift=0;lyrics()});
 $('font-down').addEventListener('click',()=>{font=Math.max(14,font-2);lyrics()});$('font-up').addEventListener('click',()=>{font=Math.min(36,font+2);lyrics()});
 $('scroll').addEventListener('click',()=>{if(scrollFrame)stopScroll();else if(current){$('scroll').setAttribute('aria-pressed','true');$('scroll').textContent='Ⅱ Dừng cuộn';scrollFrame=requestAnimationFrame(scrollStep)}});
-$('share').addEventListener('click',()=>{if(current)call('share',{title:current.title,text:current.title+(current.author?' — '+current.author:'')+' · Góc Hợp Âm',url:SITES_HOME+'/?song='+encodeURIComponent(current.sourceUrl)}).catch(error=>toast(error.message))});
+$('share').addEventListener('click',()=>{if(current)call('share',{title:current.title,text:current.title+(current.author?' — '+current.author:'')+' · Góc Hợp Âm',url:'https://gochopam.pages.dev/?song='+encodeURIComponent(current.sourceUrl)}).catch(error=>toast(error.message))});
 $('bpm').addEventListener('input',updateMetro);$('beats').addEventListener('change',()=>{beatLights();updateMetro()});$('bpm-down').addEventListener('click',()=>{$('bpm').value=bpmValue(Number($('bpm').value)-5);updateMetro()});$('bpm-up').addEventListener('click',()=>{$('bpm').value=bpmValue(Number($('bpm').value)+5);updateMetro()});$('metro-toggle').addEventListener('click',()=>{metroRunning=!metroRunning;updateMetro()});
 let taps=[];$('tap-tempo').addEventListener('click',()=>{const now=Date.now();if(taps.length&&now-taps.at(-1)>2000)taps=[];taps.push(now);taps=taps.slice(-6);if(taps.length>1){$('bpm').value=bpmValue(60000*(taps.length-1)/(now-taps[0]));updateMetro()}});
 $('help').addEventListener('click',()=>call('help').catch(error=>toast(error.message)));
 $('clear-saved').addEventListener('click',()=>$('clear-confirm').hidden=false);$('cancel-clear').addEventListener('click',()=>$('clear-confirm').hidden=true);$('confirm-clear').addEventListener('click',async()=>{try{await call('save',{value:'{}'});offline=Object.create(null);refreshSaved();saveLabel();$('clear-confirm').hidden=true;toast('Đã xóa bài ngoại tuyến trên thiết bị.')}catch(error){toast(error.message)}});
-function pause(){if(studio.permissionPending||follow.permissionPending||musicTools.permissionPending)return;follow.stop();studio.onHide();closeVideo();stopScroll();metroRunning=false;stopWebMetro();call('metronome',{running:false,bpm:80,beats:4}).catch(()=>{});call('awake',{enabled:false}).catch(()=>{});metroLabel()}
+function pause(){if(studio.permissionPending||follow.permissionPending||musicTools.permissionPending)return;songSheet.stop();follow.stop();studio.onHide();closeVideo();stopScroll();metroRunning=false;stopWebMetro();call('metronome',{running:false,bpm:80,beats:4}).catch(()=>{});call('awake',{enabled:false}).catch(()=>{});metroLabel()}
 document.addEventListener('visibilitychange',()=>{if(document.hidden)pause()});window.addEventListener('nativePause',pause);window.addEventListener('pagehide',pause);
-beatLights();call('load').then(value=>{try{offline=offlineLibrary(JSON.parse(value))}catch{toast('Chưa đọc được thư viện ngoại tuyến.')}refreshSaved()}).catch(error=>toast(error.message));loadCatalog();
+beatLights();
+const offlineReady=call('load').then(value=>{
+ offline=parseOfflineSongs(value);offlineWritable=true;refreshSaved();
+}).catch(()=>toast('Chưa đọc được thư viện ngoại tuyến.'));
+if(!native){
+ if(window.isSecureContext&&'serviceWorker' in navigator)navigator.serviceWorker.register('/service-worker.js').catch(()=>{});
+ window.addEventListener('storage',e=>{if(e.key===offlineSongStorageKey){try{offline=parseOfflineSongs(e.newValue);offlineWritable=true;refreshSaved();saveLabel()}catch{offlineWritable=false;}}});
+}
+loadCatalog();
 
-const follow=createFollow({call,native,toast,getSong:()=>current,getVideo:()=>currentVideo,stopRegular:stopScroll,onHighlight(index){document.querySelectorAll('.lyric-line').forEach(el=>el.classList.toggle('active',Number(el.dataset.line)===index));const el=document.querySelector('.lyric-line[data-line="'+index+'"]'),body=$('reader-body');if(el)body.scrollTo({top:Math.max(0,el.getBoundingClientRect().top-body.getBoundingClientRect().top+body.scrollTop-body.clientHeight*.35),behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'})}});
+const follow=createFollow({call,native,toast,getSong:()=>current,getVideo:()=>currentVideo,stopRegular:stopScroll,onClear(){document.querySelectorAll('#lyrics .active').forEach(el=>el.classList.remove('active'))},onHighlight(index){document.querySelectorAll('.lyric-line').forEach(el=>el.classList.toggle('active',Number(el.dataset.line)===index));const el=document.querySelector('.lyric-line[data-line="'+index+'"]'),body=$('reader-body');if(el)body.scrollTo({top:Math.max(0,el.getBoundingClientRect().top-body.getBoundingClientRect().top+body.scrollTop-body.clientHeight*.35),behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'})}});
 window.GocVideoTick=event=>{if(event&&event.id===currentVideo&&Number.isFinite(event.time)){follow.onTick(event);if(event.error)$('video-status').textContent=event.error+' · thử Mở YouTube'}};
 window.addEventListener('message',event=>{const frame=$('video-mount').querySelector('iframe');if(event.origin===location.origin&&frame&&event.source===frame.contentWindow&&event.data?.type==='goc:tick')window.GocVideoTick(event.data)});
 const studio=createStudio({call,native,toast,beforeRecord(){stopWebMetro();metroRunning=false;metroLabel()}});
@@ -446,10 +1243,11 @@ $('reader-options-close').addEventListener('click',()=>$('reader-options').open=
 
 $('github').addEventListener('click',()=>native?call('github'):window.open('https://github.com/duyuyd/goc-hop-am','_blank','noopener'));
 
-$('share-app').addEventListener('click',()=>call('share',{title:'Góc Hợp Âm',text:'Cùng tìm hợp âm và tập hát trên Góc Hợp Âm · NPT Duy',url:SITES_HOME+'/'}).catch(error=>toast(error.message)));
+$('share-app').addEventListener('click',()=>call('share',{title:'Góc Hợp Âm',text:'Cùng tìm hợp âm và tập hát trên Góc Hợp Âm · NPT Duy',url:'https://gochopam.pages.dev/'}).catch(error=>toast(error.message)));
 
-const musicTools=createMusicTools({native,call,toast,getSong:()=>current});
-$('music-open').addEventListener('click',()=>musicTools.open());$('reader-sheet').addEventListener('click',()=>musicTools.printLyrics());
+const musicTools=createMusicTools({native,call,toast,getSong:()=>current,getShift:()=>shift,onFindPdf(){if(current)songSheet.open();else{showTab('library');$('sheet-catalog').click()}}});
+const songSheet=createSongSheet({host:$('reader-body'),getSong:()=>current,getShift:()=>shift,native,call,toast,onPlay(){follow.stop();stopScroll();musicTools.stop();if(native)call('videoPause').catch(()=>{});else $('video-mount').querySelector('iframe')?.contentWindow.postMessage({type:'goc:command',command:'pause'},location.origin)},onShow(show){$('lyrics').hidden=false;$('reader-sheet').setAttribute('aria-pressed',String(show));follow.refresh()}});
+$('music-open').addEventListener('click',()=>musicTools.open());$('reader-make-sheet').addEventListener('click',()=>musicTools.open());$('reader-sheet').addEventListener('click',()=>songSheet.open());
 
 if(!native&&'serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('/service-worker.js').catch(()=>{});
 
