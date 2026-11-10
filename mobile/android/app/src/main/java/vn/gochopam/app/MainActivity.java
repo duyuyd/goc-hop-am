@@ -124,13 +124,20 @@ public final class MainActivity extends Activity {
     final String appHost=getPackageName().toLowerCase(java.util.Locale.ROOT),origin="https://"+appHost;
     videoWeb.setWebViewClient(new WebViewClient(){
       @Override public boolean shouldOverrideUrlLoading(WebView view,WebResourceRequest request){if(!request.isForMainFrame())return false;Uri u=request.getUrl();return !("about".equals(u.getScheme())||("https".equals(u.getScheme())&&(appHost.equals(u.getHost())||(("www.youtube-nocookie.com".equals(u.getHost())||"www.youtube.com".equals(u.getHost()))&&u.getPath()!=null&&u.getPath().startsWith("/embed/")))));}
+      @Override public WebResourceResponse shouldInterceptRequest(WebView view,WebResourceRequest request){
+        Uri u=request.getUrl();
+        if(!"https".equals(u.getScheme())||!appHost.equals(u.getHost()))return super.shouldInterceptRequest(view,request);
+        String name="/player.html".equals(u.getPath())?"player.html":"/player.js".equals(u.getPath())?"player.js":null;
+        if(name==null)return blocked();
+        try{return new WebResourceResponse(name.endsWith(".js")?"application/javascript":"text/html","UTF-8",200,"OK",Collections.singletonMap("Cache-Control","no-store"),getAssets().open(name));}catch(Exception e){return blocked();}
+      }
       @Override public void onPageFinished(WebView view,String url){if(videoWeb!=view||videoPorts!=null)return;videoPorts=view.createWebMessageChannel();videoPorts[0].setWebMessageCallback(new WebMessagePort.WebMessageCallback(){@Override public void onMessage(WebMessagePort port,WebMessage message){try{String raw=message.getData();if(raw==null||raw.length()>1500)return;JSONObject v=new JSONObject(raw);double time=v.optDouble("time",-1);if(id.equals(v.optString("id"))&&Double.isFinite(time)&&time>=0&&time<86400)emit("GocVideoTick",v);}catch(Exception ignored){}}});view.postWebMessage(new WebMessage("goc:connect",new WebMessagePort[]{videoPorts[1]}),Uri.parse(origin));}
     });
     videoPanel.addView(videoWeb,new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,LinearLayout.LayoutParams.MATCH_PARENT));
     layout.addView(videoPanel,0);arrange();
-    String config=new JSONObject().put("id",id).put("origin",origin).toString();
-    String html=new String(read(getAssets().open("player.html"),200000),StandardCharsets.UTF_8).replace("<script id=\"goc-player-config\" type=\"application/json\">{}</script>","<script id=\"goc-player-config\" type=\"application/json\">"+config+"</script>").replace("<script src=\"player.js?v=121\"></script>","<script>"+new String(read(getAssets().open("player.js"),200000),StandardCharsets.UTF_8)+"</script>");
-    videoWeb.loadDataWithBaseURL(origin+"/",html,"text/html","UTF-8",null);
+    // Load the signed, packaged player assets at a private virtual origin;
+    // a validated video ID is passed through the URL, never injected into HTML.
+    videoWeb.loadUrl(origin+"/player.html?id="+id);
   }
   private void arrange(){landscape[0]=getResources().getConfiguration().orientation==Configuration.ORIENTATION_LANDSCAPE;layout.setOrientation(landscape[0]?LinearLayout.HORIZONTAL:LinearLayout.VERTICAL);web.setLayoutParams(new LinearLayout.LayoutParams(landscape[0]?0:LinearLayout.LayoutParams.MATCH_PARENT,landscape[0]?LinearLayout.LayoutParams.MATCH_PARENT:0,1));if(videoPanel!=null)videoPanel.setLayoutParams(new LinearLayout.LayoutParams(landscape[0]?Math.max(dp(220),Math.min(getResources().getDisplayMetrics().widthPixels*2/3,dp(videoExtent))):LinearLayout.LayoutParams.MATCH_PARENT,landscape[0]?LinearLayout.LayoutParams.MATCH_PARENT:dp(videoExtent)));}
   @Override public void onConfigurationChanged(Configuration value){super.onConfigurationChanged(value);arrange();}
