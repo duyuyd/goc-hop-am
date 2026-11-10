@@ -1,0 +1,51 @@
+name: Prepare patched dependency candidate (single branch)
+on:
+  push:
+    branches:
+      - security/alerts-triage-2026-11-10
+    paths:
+      - .github/workflows/security-patch-candidate.yml
+permissions:
+  contents: write
+jobs:
+  candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: security/alerts-triage-2026-11-10
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Re-resolve known Cloudflare security dependencies
+        run: npm install --save-dev --save-exact --package-lock-only --ignore-scripts --no-audit @cloudflare/vite-plugin@1.68.0 wrangler@4.159.0
+      - name: Install exact lockfile
+        run: npm ci --no-audit
+      - name: Check high and critical vulnerabilities
+        run: |
+          npm audit --json > candidate-audit.json || true
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          const report = JSON.parse(fs.readFileSync('candidate-audit.json', 'utf8'));
+          const v = report.metadata?.vulnerabilities;
+          if (!v) throw Error('npm audit unavailable');
+          console.log(JSON.stringify({vulnerabilities:v},null,2));
+          if ((v.high??0)+(v.critical??0)>0) throw Error('High/critical advisories remain');
+          JS
+      - name: Run focused tests
+        run: node --test tests/accounts.test.mjs tests/passwords.test.mjs tests/catalog.test.mjs tests/reader.test.mjs tests/mobile.test.mjs
+      - name: Build web runtime
+        run: npm run build
+      - name: Commit validated dependency lockfile to this PR branch only
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json
+          if git diff --cached --quiet; then
+            echo "No dependency changes"
+            exit 0
+          fi
+          git commit -m "fix(security): patch Cloudflare tooling dependencies [skip ci]"
+          git push origin HEAD:security/alerts-triage-2026-11-10
