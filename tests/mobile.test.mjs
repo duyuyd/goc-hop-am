@@ -65,6 +65,12 @@ test('delivered bundle matches sources and native shells have no purchasing or p
  const java=await readFile(new URL('../mobile/android/app/src/main/java/vn/gochopam/app/MainActivity.java',import.meta.url),'utf8');
  const swift=await readFile(new URL('../mobile/ios/MusicViewController.swift',import.meta.url),'utf8');
  for(const source of [java,swift]){assert.ok(source.includes('catalog|reader|video-captions'));assert.ok(!source.includes('/api/auth'));assert.ok(!source.includes('/api/commerce'));}
+ assert.ok(java.includes('videoWeb.loadUrl(origin+"/player.html?id="+id)'));
+ assert.ok(!java.includes('videoWeb.loadDataWithBaseURL'));
+ assert.ok(java.includes('printWeb.getSettings().setBlockNetworkLoads(true)'));
+ const iosRecording=await readFile(new URL('../mobile/ios/PerformanceController.swift',import.meta.url),'utf8');
+ assert.ok(iosRecording.includes('contentsOfDirectory('));
+ assert.ok(!iosRecording.includes('fileExists(atPath: file.path)'));
 });
 
 
