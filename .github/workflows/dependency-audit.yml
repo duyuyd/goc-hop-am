@@ -1,0 +1,51 @@
+name: Dependency security audit
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  npm-audit:
+    name: Report npm vulnerabilities (lockfile)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Scan exact package-lock dependency tree
+        shell: bash
+        run: |
+          npm audit --json > npm-audit.json || true
+          node --input-type=module <<'JS'
+          import {readFileSync, appendFileSync} from 'node:fs';
+          let report;
+          try { report = JSON.parse(readFileSync('npm-audit.json', 'utf8')); }
+          catch { console.error('npm audit did not produce valid JSON'); process.exit(1); }
+          const counts = report.metadata?.vulnerabilities;
+          if (!counts) { console.error('npm audit data unavailable:', report.error?.message || 'unknown error'); process.exit(1); }
+          const summary = [
+            '## npm dependency audit',
+            '',
+            'Counts from the checked-out package-lock.json; not identical to GitHub Dependabot alerts.',
+            '',
+            '| Severity | Count |',
+            '| --- | ---: |',
+            ...['critical','high','moderate','low','info'].map(k => `| ${k} | ${counts[k] ?? 0} |`),
+            '',
+            'Inspect the audit artifact for affected packages and fixed versions.',
+            'Do not use npm audit fix --force or merge upgrades without app/mobile tests.',
+            '',
+          ].join('\n');
+          appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
+          console.log(summary);
+          if ((counts.critical ?? 0) + (counts.high ?? 0) > 0) process.exitCode = 1;
+          JS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: npm-security-audit
+          path: npm-audit.json
+          retention-days: 7
+          if-no-files-found: warn
