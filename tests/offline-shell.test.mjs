@@ -30,8 +30,8 @@ test('the offline worker uses only public static files and falls back on a disco
   let installed;
   events.get('install')({waitUntil:promise=>{installed=promise}});
   await installed;
-  assert.ok(cached.has('/live.js?v=143'));
-  assert.ok(cached.has('/mobile/bundle.js?v=143'));
+  assert.ok(cached.has('/live.js?v=144'));
+  assert.ok(cached.has('/mobile/bundle.js?v=144'));
   const fetchEvent=(path,mode='navigate')=>{
     let response;
     events.get('fetch')({request:{url:origin+path,method:'GET',mode},respondWith:value=>{response=value}});

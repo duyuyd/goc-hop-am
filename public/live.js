@@ -146,7 +146,6 @@ $('reader-fullscreen').onclick=async()=>{const on=!$('reader').classList.contain
 document.addEventListener('fullscreenchange',()=>{if(ownsFullscreen&&!document.fullscreenElement){ownsFullscreen=false;setExpanded(false)}});
 document.addEventListener('visibilitychange',()=>{if(document.hidden)stopScroll()});
 window.addEventListener('account:bookmarks',e=>{const merged=new Map([...favorites,...e.detail.filter(s=>s&&valid(s.url))].map(s=>[s.id,s]));favorites=[...merged.values()];favorites.forEach(s=>registry.set(s.id,s));try{localStorage.setItem('anh-live-favorites',JSON.stringify(favorites))}catch{}if(home&&(state.mode==='home'||state.mode==='favorites'))draw(state.mode==='favorites'?{items:favorites,total:favorites.length}:{...home,items});window.dispatchEvent(new CustomEvent('bookmarks:update',{detail:favorites}));if(current)readerSaved()});
-$('sheet-catalog').onclick=()=>{state={q:'',type:'title',genre:'',mode:'sheets',page:0};$('query').value='';load({scroll:true})};
 $('favorites').onclick=()=>{clearTimeout(typing);state={...state,q:'',genre:'',mode:'favorites',page:0};$('query').value='';load({scroll:true})};
 $('reader-download').onclick=toggleDownload;
 window.addEventListener('storage',e=>{if(e.key===offlineSongStorageKey){if(state.mode==='offline')draw(downloadedResults());if(current)readerSaved();}});
@@ -178,7 +177,7 @@ async function refreshHome(){try{const response=await fetch('/api/catalog?mode=h
 (async()=>{
  try{const response=await fetch('/catalog-seed.json');if(response.ok)setup(await response.json())}catch{}
  const p=new URLSearchParams(location.search),shared=valid(p.get('song')),songId=location.hash.match(/^#bai\/([A-Za-z0-9_-]+)$/)?.[1];
- state={q:(p.get('q')||'').slice(0,120),type:['title','singer','composer'].includes(p.get('type'))?p.get('type'):'title',genre:genres.some(g=>String(g.id)===p.get('genre'))?p.get('genre'):'',mode:['home','search','browse','hot','latest','favorites','offline'].includes(p.get('mode'))?p.get('mode'):'home',page:Math.max(0,Math.min(2000,parseInt(p.get('page')||'0',10)||0))};
+ state={q:(p.get('q')||'').slice(0,120),type:['title','singer','composer'].includes(p.get('type'))?p.get('type'):'title',genre:genres.some(g=>String(g.id)===p.get('genre'))?p.get('genre'):'',mode:['home','search','browse','hot','latest','favorites','offline','sheets'].includes(p.get('mode'))?p.get('mode'):'home',page:Math.max(0,Math.min(2000,parseInt(p.get('page')||'0',10)||0))};
  if(state.mode!=='offline'){if(state.q)state.mode='search';else if(state.genre)state.mode='browse'}
  $('query').value=state.q;await load();
  if(shared){const id=songReferenceId(shared);if(!registry.has(id))registry.set(id,{id,url:shared,title:'Đang mở bài…',local:!!communitySongId(shared)});openSong(id)}else if(songId&&registry.has(songId))openSong(songId);

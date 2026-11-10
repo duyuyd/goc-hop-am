@@ -19,7 +19,6 @@ class Element {
 function pdf(numPages) {
   return {
     numPages, destroyed: false,
-    async destroy() { this.destroyed = true; },
     async getPage() {
       return {
         getViewport: () => ({ width: 500, height: 700 }),
@@ -36,7 +35,13 @@ test('an older pending PDF never replaces the new song or re-enables the old dow
   let finishOld;
   const oldPending = new Promise(resolve => { finishOld = resolve; });
   globalThis.document = { createElement: () => new Element() };
-  globalThis.GocPdf = { getDocument: ({ data }) => ({ promise: data[0] === 1 ? oldPending : Promise.resolve(newPdf) }) };
+  globalThis.GocPdf = { getDocument: ({ data }) => {
+    const documentPdf = data[0] === 1 ? oldPdf : newPdf;
+    return {
+      promise: documentPdf === oldPdf ? oldPending : Promise.resolve(newPdf),
+      async destroy() { documentPdf.destroyed = true; },
+    };
+  } };
   try {
     const host = { clientWidth: 800, prepend(panel) { this.panel = panel; } };
     let song = { sourceUrl: 'https://example.test/one' };
@@ -63,6 +68,8 @@ test('an older pending PDF never replaces the new song or re-enables the old dow
     assert.equal(oldPdf.destroyed, true);
     assert.equal(newPdf.destroyed, false);
     assert.equal(state('page').textContent, 'Trang 1 / 2');
+    sheet.setSong();
+    assert.equal(newPdf.destroyed, true);
   } finally {
     globalThis.document = originalDocument;
     globalThis.GocPdf = originalEngine;
