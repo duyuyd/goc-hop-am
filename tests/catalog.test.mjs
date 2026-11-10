@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import {parseCatalog,sourceFor,safeSongUrl,catalog} from '../lib/music-catalog.mjs';
+const card=(title,url='https://hopamviet.vn/chord/song/nang-tho/W8IU6E0B.html')=>`<a href="${url}" class="song-card group"><div class="font-bold text-[15px]">${title}</div><div><span class="truncate">Hoàng Dũng</span></div><div class="italic">LYRIC_MUST_NOT_BE_RETURNED</div></a>`;
+const html=`<p>Có <strong>16</strong> kết quả được tìm thấy</p>${card('Nàng thơ')}<aside>${card('Sidebar must not appear','https://hopamviet.vn/chord/song/khac/W8IU0ABC.html')}</aside>`;
+const result=parseCatalog(html,'https://hopamviet.vn/chord/search?song=Nang+tho',0,'search');
+assert.equal(result.total,16);assert.equal(result.items.length,1);assert.equal(result.items[0].title,'Nàng thơ');assert.equal(result.items[0].author,'Hoàng Dũng');assert.ok(!JSON.stringify(result).includes('LYRIC_MUST_NOT_BE_RETURNED'));assert.equal(result.hasMore,false);
+const genre=parseCatalog(`<div>19,178 bài hát</div>${card('Nàng thơ')}<a href="?page=1" rel="next">Sau</a>`,'https://hopamviet.vn/chord/category/3/nhac-tre',0);
+assert.equal(genre.total,19178);assert.equal(genre.hasMore,true);
+assert.equal(parseCatalog(`<div>19,178 bài hát</div>${card('Nàng thơ')}`,'https://hopamviet.vn/chord/category/3/nhac-tre',639).hasMore,false);
+assert.equal(safeSongUrl('https://evil.test/chord/song/a/ID.html'),null);assert.equal(safeSongUrl('javascript:alert(1)'),null);assert.equal(safeSongUrl('https://hopamviet.vn/auth/login'),null);
+assert.ok(sourceFor(new URLSearchParams({q:'Mỹ Tâm',type:'singer',page:'2'})).url.includes('type=singer'));
+assert.ok(!sourceFor(new URLSearchParams({genre:'3',url:'http://localhost'})).url.includes('localhost'));
+assert.equal(sourceFor(new URLSearchParams({page:'-9'})).page,0);
+let calls=0;const fixture=async()=>{calls++;return new Response(html)};
+const args=new URLSearchParams({q:'Fixture song unique'});await catalog(args,fixture);await catalog(args,fixture);assert.equal(calls,1);
+await assert.rejects(()=>catalog(new URLSearchParams({q:'Upstream failure'}),async()=>new Response('error',{status:503})));
+console.log('Passed: result/author parsing, sidebar exclusion, pagination, URL restrictions, no lyric copying, cache, upstream errors.');

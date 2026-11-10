@@ -1,0 +1,40 @@
+import {decodeEntities,escapeText} from './text.js';
+(() => {
+const $=id=>document.getElementById(id),esc=s=>escapeText(decodeEntities(s??''));
+const page=document.body.dataset.page;
+async function api(url,body,method='POST'){const r=await fetch(url,body===undefined?{}:{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});let data;try{data=await r.json()}catch{throw new Error('Chưa kết nối được hệ thống. Hãy thử lại.')}if(!r.ok)throw new Error(data.error||'Chưa thực hiện được yêu cầu.');return data}
+const message=(id,text,ok=false)=>{const e=$(id);if(e){e.textContent=text;e.classList.toggle('success',ok)}};
+async function logout(){try{await api('/api/auth',{action:'logout'});location.assign('/dang-nhap')}catch(e){message('form-message',e.message);message('dash-message',e.message)}}
+if($('logout'))$('logout').onclick=logout;
+if(page==='auth'){
+ const form=$('auth-form'),submit=$('auth-submit'),reg=document.body.dataset.mode==='register';
+ $('toggle-password').onclick=()=>{const input=form.elements.namedItem('password');const visible=input.type==='password';input.type=visible?'text':'password';$('toggle-password').textContent=visible?'Ẩn':'Hiện'};
+ form.onsubmit=async e=>{e.preventDefault();message('form-message','');submit.disabled=true;try{const values=Object.fromEntries(new FormData(form));const data=await api('/api/auth',{...values,action:reg?'register':'login'});const next=new URLSearchParams(location.search).get('next');location.assign(['/quan-tri','/tai-khoan','/','/tai-lieu'].includes(next)?next:data.user.role==='admin'?'/quan-tri':'/tai-khoan')}catch(e){message('form-message',e.message);submit.disabled=false}};
+}
+if(page==='admin'){
+ let data;
+ function panel(name){document.querySelectorAll('[data-section]').forEach(e=>e.hidden=e.dataset.section!==name);document.querySelectorAll('.dash-sidebar [data-panel]').forEach(e=>e.classList.toggle('active',e.dataset.panel===name));$('panel-title').textContent={overview:'Tổng quan',songs:'Bài hát riêng',members:'Thành viên',settings:'Cài đặt trang',commerce:'Cửa hàng & đơn',updates:'Cập nhật & kết nối'}[name]||'Tổng quan'}
+ function show(){const s=data.stats||{};$('stat-members').textContent=s.members||0;$('stat-songs').textContent=s.songs||0;$('stat-published').textContent=s.published||0;$('current-user').textContent=data.user.name;$('members-body').innerHTML=data.members.map(u=>`<tr><td>${esc(u.username)}</td><td>${esc(u.name)}</td><td>${u.role==='admin'?'Quản trị viên':'Thành viên'}</td><td>${new Date(u.created_at).toLocaleDateString('vi-VN')}</td></tr>`).join('');$('admin-songs').innerHTML=data.songs.length?data.songs.map(s=>`<article class="song-admin-row"><div><strong>${esc(s.title)}</strong><small>${esc(s.author)} · ${esc(s.key)} &nbsp; <span class="badge-small ${s.published?'':'draft'}">${s.published?'Đã xuất bản':'Bản nháp'}</span></small></div><button class="quiet-button" data-edit="${esc(s.id)}">Chỉnh sửa</button></article>`).join(''):'<div class="empty-admin"><strong>Kho riêng đã sẵn sàng</strong>Thêm bài đầu tiên để hiển thị trên thư viện.</div>';for(const name of ['title','tagline'])$('settings-form').elements.namedItem(name).value=data.settings[name]||'';}
+ async function refresh(){data=await api('/api/admin');show()}
+ refresh().catch(e=>message('dash-message',e.message));
+ document.addEventListener('click',e=>{const b=e.target.closest('[data-panel]'),edit=e.target.closest('[data-edit]');if(b)panel(b.dataset.panel);if(edit&&data){const song=data.songs.find(s=>s.id===edit.dataset.edit);if(song)editor(song)}});
+ function editor(song){$('song-form').reset();for(const name of ['id','title','author','genre','rhythm','key','content'])$('song-form').elements.namedItem(name).value=song?song[name]||'':name==='key'?'C':'';$('song-form').elements.namedItem('published').checked=song?!!song.published:true;$('editor-title').textContent=song?'Chỉnh sửa bài hát':'Thêm bài hát';message('editor-message','');$('song-editor').showModal()}
+ $('new-song').onclick=()=>editor();$('close-editor').onclick=()=>$('song-editor').close();
+ $('song-form').onsubmit=async e=>{e.preventDefault();const button=$('save-song');button.disabled=true;try{const values=Object.fromEntries(new FormData(e.target));values.published=e.target.elements.namedItem('published').checked;await api('/api/admin',{...values,action:'song'});$('song-editor').close();message('dash-message','Đã lưu bài hát.',true);await refresh()}catch(e){message('editor-message',e.message)}finally{button.disabled=false}};
+ $('settings-form').onsubmit=async e=>{e.preventDefault();const button=e.target.querySelector('button');button.disabled=true;try{await api('/api/admin',{...Object.fromEntries(new FormData(e.target)),action:'settings'});message('dash-message','Đã cập nhật cài đặt website.',true)}catch(e){message('dash-message',e.message)}finally{button.disabled=false}};
+}
+if(page==='account'){
+ api('/api/auth').then(({user})=>{if(!user){location.assign('/dang-nhap');return}$('profile-name').textContent=user.name;$('profile-avatar').textContent=user.name.split(' ').map(s=>s[0]).slice(-2).join('');$('profile-info').textContent='@'+user.username+' · '+(user.role==='admin'?'Quản trị viên':'Thành viên');$('admin-entry').hidden=user.role!=='admin';if(user.provider==='google'){$('password-form').hidden=true;$('profile-info').textContent+=' · Google'}}).catch(e=>message('form-message',e.message));
+ $('password-form').onsubmit=async e=>{e.preventDefault();const button=e.target.querySelector('button');button.disabled=true;try{await api('/api/auth',{...Object.fromEntries(new FormData(e.target)),action:'password'});e.target.reset();message('form-message','Đã đổi mật khẩu. Các phiên đăng nhập khác đã được kết thúc.',true)}catch(e){message('form-message',e.message)}finally{button.disabled=false}};
+}
+if(page==='library'){
+ let me=null;
+ api('/api/settings').then(s=>{document.querySelectorAll('[data-site-title]').forEach(e=>e.textContent=decodeEntities(s.title));const tag=$('site-tagline');if(tag)tag.textContent=decodeEntities(s.tagline);document.title=decodeEntities(s.title)+' · Hợp âm & giai điệu'}).catch(()=>{});
+ (document.body.dataset.membership==='guest'?Promise.resolve({user:null}):api('/api/auth')).then(async ({user})=>{me=user;window.dispatchEvent(new CustomEvent('account:state',{detail:{signedIn:!!user}}));if(!user)return;$('account-nav').innerHTML=`<a class="member-link" href="/tai-khoan">${esc(user.name)}</a>${user.role==='admin'?'<a class="member-link admin-nav" href="/quan-tri">Quản trị</a>':''}`;const menu=$('menu-account');if(menu)menu.innerHTML=$('account-nav').innerHTML;try{const data=await api('/api/bookmarks');window.dispatchEvent(new CustomEvent('account:bookmarks',{detail:data.items}))}catch{}}).catch(()=>{});
+ window.addEventListener('bookmarks:update',e=>{if(me)api('/api/bookmarks',{items:e.detail},'PUT').catch(()=>{})});
+ const native=document.createElement('section');native.id='community-songs';native.hidden=true;native.innerHTML='<div class="heading"><h2>Bài hát trong thư viện riêng</h2></div><div id="community-list" class="results"></div>';document.querySelector('.featured-section').before(native);
+ async function ownSongs(q=''){try{const data=await api('/api/songs?q='+encodeURIComponent(q));native.hidden=!data.items.length;$('community-list').innerHTML=data.items.map(s=>`<article class="row"><button class="open" data-native="${esc(s.id)}"><strong>${esc(s.title)}</strong><span class="meta">${esc(s.author)} · ${esc(s.key)}</span><span class="open-label">Đọc ngay trong thư viện ›</span></button></article>`).join('')}catch{native.hidden=true}}
+ ownSongs();$('search').addEventListener('submit',()=>ownSongs($('query').value.trim()));
+ document.addEventListener('click',async e=>{const b=e.target.closest('[data-native]');if(!b)return;b.disabled=true;try{const {song}=await api('/api/songs?id='+encodeURIComponent(b.dataset.native));window.dispatchEvent(new CustomEvent('library:open-local',{detail:song}))}catch(e){message('status',e.message)}finally{b.disabled=false}});
+}
+})();

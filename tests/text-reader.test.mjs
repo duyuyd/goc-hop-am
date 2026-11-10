@@ -1,0 +1,25 @@
+import assert from 'node:assert/strict';
+import {decodeEntities,foldText} from '../public/text.js';
+import {renderLyrics,readerFont} from '../public/reader-format.js';
+import {clean,parseCatalog} from '../lib/music-catalog.mjs';
+
+assert.equal(decodeEntities('T&ecirc;n b&agrave;i &amp; &aacute;nh trăng'),'Tên bài & ánh trăng');
+assert.equal(decodeEntities('m&ocirc;̣t &amp;ecirc; &#273; &#x1ec7;'),'một ê đ ệ');
+assert.equal(decodeEntities('&#xD800; &#1114112;'),'� �');
+assert.equal(decodeEntities('&unknown;'), '&unknown;');
+assert.equal(clean('<b>Ng&ocirc; Th&ugrave;y Mi&ecirc;n</b>'),'Ngô Thùy Miên');
+assert.equal(foldText('  Đặng THÁI Sơn '),'dang thai son');
+assert.equal(foldText('Phạm Duy'),foldText('Phạm Duy'));
+assert.equal(readerFont(null),20);assert.equal(readerFont('22'),22);assert.equal(readerFont(500),20);
+const lyrics='Lời do người thử viết [Am]chậm rãi\n\n[F#m7/C#]tiếp theo &ecirc;\n&lt;img src=x onerror=alert(1)&gt;';
+const rendered=renderLyrics(lyrics,2);
+assert.match(rendered,/<span class="chord-word"><b class="chord">\[Bm\]<\/b>chậm<\/span>/);
+assert.match(rendered,/\[G#m7\/D#\]/);assert.match(rendered,/theo ê/);
+assert.equal((rendered.match(/class="lyric-line"/g)||[]).length,4);
+assert.ok(!rendered.includes('<img'));assert.ok(rendered.includes('&lt;img'));
+const without=renderLyrics(lyrics,0,true);assert.ok(!without.includes('[Am]'));assert.ok(without.includes('chậm rãi'));
+const cards=Array.from({length:20},(_,i)=>`<a class="song-card" href="/chord/song/check/TEST${i}.html"><div class="font-bold">Bài ${i}</div></a>`).join('');
+const page=parseCatalog('<strong>396</strong> tác phẩm khớp tìm kiếm'+cards+'<a href="?page=14">›</a>',undefined,13,'search');
+assert.equal(page.total,396);assert.equal(page.items.length,20);assert.equal(page.hasMore,true);
+assert.equal(parseCatalog('<strong>0</strong> kết quả',undefined,0,'search').total,0);
+console.log('Passed: Vietnamese and nested entities, Unicode normalization, accent folding, safe lyric markup, chord-word grouping, blank lines, font limits, and pagination after page 13.');

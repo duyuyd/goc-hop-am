@@ -9,3 +9,6 @@ Thông tin này áp dụng cho phần mã và giao diện gốc của dự án G
 Thư viện, công cụ xây dựng, nội dung âm nhạc và thành phần bên ngoài giữ thông tin tác giả/giấy phép riêng của chúng.
 
 “Chưa ký” trong tên IPA hoặc AAB là trạng thái chữ ký kỹ thuật của gói cài đặt, không phải thông tin đổi chủ dự án. APK Android có thể được phân phối trực tiếp từ website; bản iOS chưa ký không cài trực tiếp lên iPhone.
+
+
+Bộ đọc PDF dùng Mozilla PDF.js 6.5.438 (Apache-2.0); xem public/mobile/vendor/PDFJS-LICENSE.txt. Tác giả và ký hiệu trong các bản phổ nguồn được giữ nguyên. NPT Duy phát triển ứng dụng, không được ghi thay tác giả bài hát hoặc người chép phổ.

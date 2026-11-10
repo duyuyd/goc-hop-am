@@ -1,0 +1,13 @@
+build/
+android/.gradle/
+android/**/build/
+android/local.properties
+*.keystore
+*.jks
+*.p12
+*.mobileprovision
+ios/**/xcuserdata/
+ios/DerivedData/
+*.ipa
+*.apk
+*.aab

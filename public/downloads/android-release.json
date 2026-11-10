@@ -1,0 +1,13 @@
+{
+  "version": "1.4.0",
+  "versionCode": 6,
+  "package": "vn.gochopam.app.preview",
+  "channel": "preview",
+  "download": "/downloads/Goc_Hop_Am_Studio_Android_QA.apk",
+  "sizeBytes": 681267,
+  "sha256": "4dba3d81a153562d55a92d095785de721649e8d800b1df3fed0c05d1f390811b",
+  "author": "NPT Duy",
+  "sourceRepository": "https://github.com/duyuyd/goc-hop-am",
+  "label": "1.4.0 Studio QA",
+  "sourceCommit": "c376783d35f88a20d9cceb929652e18989057d72"
+}

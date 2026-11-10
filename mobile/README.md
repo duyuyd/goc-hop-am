@@ -58,7 +58,7 @@ node --test tests/mobile.test.mjs
 node --check public/mobile/bundle.js
 ```
 
-Tác giả dự án & người lập trình trong Giới thiệu: Nguyễn Phan Thế Duy.
+Tác giả dự án & người lập trình trong Giới thiệu: NPT Duy.
 
 Xem UI tại `/mobile/index.html` trên website. Bản web dùng GET cùng origin và localStorage; bản cài dùng cầu nối native với kho dữ liệu riêng. Thử trên thiết bị thật: tìm/mở bài, lưu rồi tắt mạng để mở lại, chuyển tông và font, tự cuộn, chia sẻ, nhịp/âm lượng, thoát app và xoay màn hình. Bài chưa lưu và tìm kiếm vẫn cần mạng/máy chủ hoạt động; app không xóa hạn ngạch máy chủ.
 

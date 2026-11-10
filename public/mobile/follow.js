@@ -47,28 +47,28 @@ export function captionTimeline(lines,cues){
  }
  return cleanTimeline(result,lines.length);
 }
-export function createFollow({call,native,toast,getSong,getVideo,onHighlight,stopRegular}){
- const e=id=>document.getElementById(id);let mode='off',line=0,clock=null,settings={},lines=[],saveTimer,generation=0,picking=false;
+export function createFollow({call,native,toast,getSong,getVideo,onHighlight,onClear=()=>{},stopRegular}){
+ const e=id=>document.getElementById(id);let mode='off',line=0,lastHighlighted=-1,clock=null,settings={},lines=[],saveTimer,generation=0,picking=false;
  const loaded=call('settingsLoad').then(value=>{try{const object=JSON.parse(value);if(object&&typeof object==='object'&&!Array.isArray(object))settings=object}catch{}}).catch(()=>{});
  const key=()=>{const song=getSong(),video=getVideo();return song&&video?song.sourceUrl+'|'+video:null};
  const offset=()=>Math.max(-120,Math.min(120,Number(settings['offset:'+key()])||0));
  function status(text){e('follow-status').textContent=text;e('follow-live').hidden=!text;e('mark-line').hidden=mode!=='mark';e('follow-mode').value=mode}
- function highlight(index){line=Math.max(0,Math.min(lines.length-1,index));onHighlight(line)}
+ function highlight(index){line=Math.max(0,Math.min(lines.length-1,index));lastHighlighted=line;onHighlight(line)}
  function save(){clearTimeout(saveTimer);saveTimer=setTimeout(()=>call('settingsSave',{value:JSON.stringify(settings)}).catch(error=>toast(error.message)),150)}
- function stop(){++generation;mode='off';call('speechStop').catch(()=>{});status('')}
+ function stop(){++generation;lastHighlighted=-1;onClear();mode='off';call('speechStop').catch(()=>{});status('')}
  async function videoReady({reload=false}={}){
   const ticket=++generation;await loaded;if(ticket!==generation)return;const k=key(),id=getVideo();if(!k||!lines.length){toast('Mở video YouTube trước khi theo lời.');return}
   stopRegular();mode='time';
-  if(!reload&&cleanTimeline(settings[k],lines.length).length){status('Lời đang theo thời gian YouTube · mốc đã lưu trên máy');return}
+  if(!reload&&cleanTimeline(settings[k],lines.length).length){status('Lời bên dưới đang theo YouTube · mốc đã lưu trên máy');return}
   status('Đang khớp lời với phụ đề của video YouTube…');
   try{const data=await call('api',{path:'/api/video-captions?'+new URLSearchParams({id})});if(ticket!==generation||id!==getVideo())return;
    const timeline=captionTimeline(lines,data.cues);
    if(!data.available||timeline.length<2){mode='off';status(data.reason||'Đã đọc phụ đề nhưng chưa khớp với lời bài hát. Thử bản thu khác hoặc nhập LRC/SRT/VTT.');return}
-   settings[k]=timeline;save();status('Đang theo lời YouTube · '+timeline.length+' mốc khớp từ phụ đề');
+   settings[k]=timeline;save();status('Đang tô sáng lời bên dưới · '+timeline.length+' mốc khớp từ phụ đề');
   }catch{if(ticket===generation){mode='off';status('Chưa kết nối được phụ đề. Thử lại hoặc nhập LRC/SRT/VTT.')}}
  }
  function apply(){const selected=e('follow-mode').value;call('speechStop').catch(()=>{});stopRegular();if(selected==='time'){videoReady();e('follow-dialog').close();return}++generation;mode=selected==='mark'?'mark':'off';if(mode==='mark'&&!key()){mode='off';toast('Mở bản thu YouTube trước khi đánh dấu câu.');return}status(mode==='mark'?'Chọn dòng lời, đánh dấu khi câu trong video bắt đầu.':'');e('follow-dialog').close()}
- async function importText(text){await loaded;const k=key();if(!k)throw new Error('Mở bản thu YouTube trước.');const cues=parseLrc(text,lines);if(!cues.length)throw new Error('Đọc được tệp nhưng chưa khớp câu hát nào. Kiểm tra đúng bài và đúng bản thu.');++generation;settings[k]=cues;save();stopRegular();mode='time';status('Đang theo YouTube · '+cues.length+' mốc từ tệp của bạn');toast('Đã nhập '+cues.length+' mốc lời.');e('follow-dialog').close()}
+ async function importText(text){await loaded;const k=key();if(!k)throw new Error('Mở bản thu YouTube trước.');const cues=parseLrc(text,lines);if(!cues.length)throw new Error('Đọc được tệp nhưng chưa khớp câu hát nào. Kiểm tra đúng bài và đúng bản thu.');++generation;settings[k]=cues;save();stopRegular();mode='time';status('Đang tô sáng lời bên dưới · '+cues.length+' mốc từ tệp của bạn');toast('Đã nhập '+cues.length+' mốc lời.');e('follow-dialog').close()}
  e('follow-open').addEventListener('click',async()=>{await loaded;e('follow-mode').value=mode==='off'?'time':mode;e('follow-offset').value=offset();e('follow-dialog').showModal()});e('follow-close').addEventListener('click',()=>e('follow-dialog').close());e('follow-apply').addEventListener('click',apply);
  e('follow-retry').addEventListener('click',()=>{videoReady({reload:true});e('follow-dialog').close()});
  e('follow-offset').addEventListener('change',async()=>{await loaded;if(!key())return;settings['offset:'+key()]=Math.max(-120,Math.min(120,Number(e('follow-offset').value)||0));e('follow-offset').value=offset();save();toast('Đã lưu độ dịch mốc cho bản thu này.')});
@@ -76,5 +76,5 @@ export function createFollow({call,native,toast,getSong,getVideo,onHighlight,sto
  e('mark-line').addEventListener('click',()=>{const k=key();if(!k||!clock||!Number.isFinite(clock.time)){toast('Chưa nhận được thời gian thật của video.');return}const cues=cleanTimeline(settings[k],lines.length).filter(c=>c.line!==line);cues.push({time:Math.max(0,clock.time-offset()),line});settings[k]=cleanTimeline(cues,lines.length);save();status('Đã ghi mốc '+clock.time.toFixed(1)+' giây · câu '+(line+1));highlight(line+1)});
  e('lrc-import').addEventListener('click',()=>importText(e('lrc-input').value).catch(error=>toast(error.message)));
  e('subtitle-file').addEventListener('click',async()=>{picking=true;try{const text=await readMusicText({native,call});if(text)await importText(text)}catch(error){toast(error.message)}finally{picking=false}});
- return {stop,videoReady,onSong(song){stop();lines=String(song?.content||'').split('\n');line=0;clock=null},select(index){highlight(index)},onTick(event){clock=event;if(mode==='time'&&event.id===getVideo()){const next=timedLine(cleanTimeline(settings[key()],lines.length),event.time-offset());if(next!==null&&next!==line)highlight(next)}},get permissionPending(){return picking},get mode(){return mode}};
+ return {stop,videoReady,refresh(){lastHighlighted=-1},onSong(song){stop();lines=String(song?.content||'').split('\n');line=0;clock=null},select(index){highlight(index)},onTick(event){clock=event;if(mode==='time'&&event.id===getVideo()){const next=timedLine(cleanTimeline(settings[key()],lines.length),event.time-offset());if(next!==null&&next!==lastHighlighted)highlight(next);else if(next===null&&lastHighlighted!==-1){lastHighlighted=-1;onClear()}}},get permissionPending(){return picking},get mode(){return mode}};
 }
