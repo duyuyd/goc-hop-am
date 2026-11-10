@@ -43,8 +43,9 @@ for(const path of Object.keys(publicPages)){
 }
 const xml=sitemap('https://goc.example/sitemap.xml');
 assert.equal((xml.match(/<url>/g)||[]).length,6);
-assert.ok(xml.includes('https://goc.example/gioi-thieu'));
-assert.ok(xml.includes('https://goc.example/ung-dung/'));
+const sitemapUrls=[...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map(match=>new URL(match[1]).href);
+assert.ok(sitemapUrls.includes(new URL('/gioi-thieu','https://goc.example').href));
+assert.ok(sitemapUrls.includes(new URL('/ung-dung/','https://goc.example').href));
 assert.ok(!/dang-nhap|quan-tri|tai-khoan|api\//.test(xml));
 assert.ok(!xml.includes('chatgpt.site'));
 await store.commerceAction(post({action:'search-verification',verification:''},ownerCookie));
