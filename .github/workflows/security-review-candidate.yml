@@ -27,7 +27,7 @@ jobs:
           const path='package.json';
           const pkg=JSON.parse(fs.readFileSync(path,'utf8'));
           pkg.overrides ??= {};
-          pkg.overrides['@esbuild-kit/core-utils']={esbuild:'0.28.2'};
+          pkg.overrides['esbuild']='0.28.2';
           pkg.overrides['@typescript-eslint/typescript-estree']={minimatch:'11.0.1'};
           fs.writeFileSync(path,JSON.stringify(pkg,null,2)+'\n');
           JS
