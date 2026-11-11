@@ -47,8 +47,11 @@ button:not(:disabled):hover, button:focus-visible, input:focus-visible, select:f
 .viewer-head h2 { font-size: clamp(1.2rem, 5vw, 1.8rem); }
 .viewer-links { display: flex; flex-wrap: wrap; gap: .5rem 1rem; margin: .65rem 0; }
 #score-image { max-width: 100%; height: auto; display: block; margin-inline: auto; background: white; }
-#score-pdf .sheet-song-head, #score-pdf .sheet-origin, #score-pdf .ss-options { display: none; }
+#score-pdf .sheet-song-head, #score-pdf .sheet-origin, #score-pdf:not(.has-parts) .ss-options { display: none; }
 #score-pdf .song-sheet { padding: .45rem 0 0; }
+#score-xml { background: white; color: #161616; overflow: auto; border-radius: .55rem; }
+#score-xml > div { min-width: 32rem; }
+#xml-status { margin: .7rem 0; color: var(--muted); }
 @media (max-width: 40rem) {
   .controls, #scores { grid-template-columns: minmax(0, 1fr); }
   .masthead, main { width: calc(100% - 1.2rem); }

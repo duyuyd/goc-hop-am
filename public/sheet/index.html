@@ -35,10 +35,9 @@ button:hover{background:#4c3158}.empty{border:1px dashed #7d6385;padding:18px;bo
 @media(max-width:480px){.controls{grid-template-columns:1fr}.controls label:first-child{grid-column:auto}.viewer iframe{height:65vh}}
 </style></head>
 <body>
-<header><div class="inner"><small>GÓC HỢP ÂM · NPT DUY</small><h1>Thư viện sheet PDF</h1><p>Tìm khuông nhạc theo tên bài, tác giả hoặc nguồn. Ưu tiên bản phổ Việt, đồng thời giữ nguồn PDF mở.</p></div></header>
+<header><div class="inner"><h1>Tra bản phổ</h1><p>Tìm theo tên bài, nhạc sĩ hoặc thư viện nguồn.</p></div></header>
 <main>
-<a href="/mobile/">← Quay về Góc Hợp Âm</a>
-<p class="note">Danh mục có nguồn xác định, không phải kho PDF sao chép từ các website khác. “Trang sheet” mở bản phổ tại website gốc; chỉ mục ghi “PDF trực tiếp” mới xem PDF trong trang này.</p>
+<nav class="actions" aria-label="Thư viện bản phổ"><a href="/ban-pho/">← Kho bản phổ mở</a><a href="/sheet/?genre=nhac-tre">Nhạc trẻ</a><a id="young-directory" target="_blank" rel="noopener noreferrer" hidden>Danh mục Nhạc Trẻ tại Hợp Âm Việt</a></nav>
 <form id="search" class="controls" role="search">
 <label for="q">Tên bài / nhạc sĩ<input type="search" id="q" maxlength="140" placeholder="Ví dụ: Chiều ngồi bên sông Hoài"></label>
 <label for="source">Website nguồn<select id="source"><option value="all">Tất cả nguồn</option></select></label>
@@ -61,12 +60,14 @@ button:hover{background:#4c3158}.empty{border:1px dashed #7d6385;padding:18px;bo
 </main>
 <script type="module">
 import {trustedPdf} from "./registry.mjs";
-import {GENRES,SHEET_SOURCES,searchRecords,providerSearchUrl,safeSourceUrl} from "./sources.mjs";
+import {GENRES,SHEET_SOURCES,YOUNG_SHEET_DIRECTORY,searchRecords,providerSearchUrl,safeSourceUrl} from "./sources.mjs?v=29";
 const $=id=>document.getElementById(id);
 const params=new URLSearchParams(location.search);
 $("q").value=(params.get("q")||"").slice(0,140);
 for(const s of SHEET_SOURCES){const o=document.createElement("option");o.value=s.id;o.textContent=s.label;$("source").append(o)}
 for(const g of GENRES){const o=document.createElement("option");o.value=g;o.textContent=g;$("genre").append(o)}
+if(params.get("genre")==="nhac-tre")$("genre").value="Nhạc Trẻ";
+$("young-directory").href=YOUNG_SHEET_DIRECTORY;
 function element(tag,className,text){const n=document.createElement(tag);if(className)n.className=className;if(text!==undefined)n.textContent=text;return n}
 function openPdf(s){
   if(!trustedPdf(s.url))return;
@@ -92,8 +93,10 @@ function showSources(){
 }
 function render(){
  const found=searchRecords({q:$("q").value,source:$("source").value,genre:$("genre").value,kind:$("kind").value,sort:$("sort").value});
- $("count").textContent=found.length+" bản phổ đã lập chỉ mục";
- $("directCount").textContent=found.filter(x=>x.format==="pdf-direct").length+" PDF trực tiếp";
+ const direct=found.filter(x=>x.format==="pdf-direct").length;
+ $("count").textContent=(found.length-direct)+" trang bản phổ tại nguồn";
+ $("directCount").textContent=direct+" PDF trực tiếp";
+ $("young-directory").hidden=$("genre").value!=="Nhạc Trẻ";
  const root=$("results");root.replaceChildren();
  for(const s of found){
    const card=element("article","card");
@@ -109,10 +112,11 @@ function render(){
    }
    card.append(action);root.append(card);
  }
- if(!found.length){root.append(element("p","empty","Chưa có bản phổ trùng trong chỉ mục nhỏ hiện tại. Dùng các nút tìm tại nguồn bên dưới để tìm thêm bài."))}
+ if(!found.length){root.append(element("p","empty","Chưa có kết quả. Anh có thể tra thêm tại các thư viện bên dưới."))}
  showSources();
  const u=new URL(location.href);
  if($("q").value.trim())u.searchParams.set("q",$("q").value.trim());else u.searchParams.delete("q");
+ if($("genre").value==="Nhạc Trẻ")u.searchParams.set("genre","nhac-tre");else u.searchParams.delete("genre");
  history.replaceState(null,"",u.pathname+u.search);
 }
 for(const id of ["q","source","genre","kind","sort"])$(id).addEventListener(id==="q"?"input":"change",render);

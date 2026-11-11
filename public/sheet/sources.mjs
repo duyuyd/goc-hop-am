@@ -13,15 +13,41 @@ export const SHEET_SOURCES = Object.freeze([
   {id:"commons",label:"Wikimedia Commons",home:"https://commons.wikimedia.org/wiki/Category:Sheet_music",domain:"commons.wikimedia.org",scope:"wiki",kind:"Bản phổ có giấy phép"}
 ]);
 
-// Exact per-song sheet pages confirmed in public indexes. Source-owned media stay there.
-// No assertion of downloadable PDF for a sheet-page record.
+export const YOUNG_SHEET_DIRECTORY = 'https://hopamviet.vn/sheet/category/3/nhac-tre';
+
+const youngSheetPages = [
+  ['em-gai-mua', 'W8IUUAZA', 'Em gái mưa', 'Mr. Siro'],
+  ['chac-ai-do-se-ve', 'W8IUI99A', 'Chắc ai đó sẽ về', 'Sơn Tùng M-TP'],
+  ['anh-cu-di-di', 'W8IUOZFD', 'Anh cứ đi đi', 'Vương Anh Tú'],
+  ['phia-sau-mot-co-gai', 'W8IUOEWO', 'Phía sau một cô gái', 'Tiên Cookie'],
+  ['sau-tat-ca', 'W8IUWFZD', 'Sau tất cả', 'Khắc Hưng'],
+  ['ba-ke-con-nghe', 'W8IUIU68', 'Ba kể con nghe', 'Nguyễn Hải Phong'],
+  ['canh-hong-phai', 'W8IUO060', 'Cánh hồng phai', 'Dương Khắc Linh'],
+  ['anh-nang-cua-anh', 'W8IUUII9', 'Ánh nắng của anh', 'Khắc Hưng'],
+  ['buon-cua-anh', 'W8IUUDUF', 'Buồn của anh', 'Đạt G - K-ICM'],
+  ['ai-chung-tinh-duoc-mai', 'W8IU79U9', 'Ai chung tình được mãi', 'Đông Thiên Đức'],
+  ['mot-nha', 'W8IUWIID', 'Một nhà', 'Da LAB'],
+  ['lam-nguoi-yeu-anh-nhe-baby', 'W8IUOOD0', 'Làm người yêu anh nhé baby', 'Nguyên Jenda'],
+  ['hoa-no-khong-mau', 'W8IU6B87', 'Hoa nở không màu', 'Nguyễn Minh Cường'],
+  ['chua-bao-gio', 'W8IUWOEC', 'Chưa bao giờ', 'Tiên Tiên'],
+  ['song-gio', 'W8IUZF6B', 'Sóng gió', 'Jack - K-ICM'],
+  ['ngay-mai-nguoi-ta-lay-chong', 'W8IU8FWE', 'Ngày mai người ta lấy chồng', 'Đông Thiên Đức'],
+  ['thang-4-la-loi-noi-doi-cua-em', 'W8IUOUAU', 'Tháng 4 là lời nói dối của em', 'Phạm Toàn Thắng'],
+  ['anh-muon-em-song-sao', 'W8IUIOCU', 'Anh muốn em sống sao', 'Chi Dân'],
+].map(([slug, songId, title, composer]) => ({
+  id: 'hav-' + songId, title, composer, genre: 'Nhạc Trẻ', sourceId: 'hav', format: 'sheet-page',
+  url: `https://hopamviet.vn/sheet/song/${slug}/${songId}.html`,
+}));
+
+// Per-song links from public indexes. Score files stay on the source site.
 export const SHEET_PAGES = Object.freeze([
   {id:"hn-chieu-hoai",title:"Chiều ngồi bên sông Hoài",composer:"Nguyễn Nho Khiêm · Phan Bảo Nam",genre:"Nhạc Trữ tình",sourceId:"hopamnet",format:"sheet-page",url:"https://hopam.net/sheet/chieu-ngoi-ben-song-hoai/"},
   {id:"hn-mua-xuan",title:"Mùa xuân về",composer:"Lê Thúy Hằng",genre:"Nhạc Quê hương",sourceId:"hopamnet",format:"sheet-page",url:"https://hopam.net/sheet/mua-xuan-ve/"},
   {id:"hav-trong-vong-tay-me",title:"Trong vòng tay mẹ",composer:"Lê Dinh · Dạ Cầm",genre:"Nhạc Trữ tình",sourceId:"hav",format:"sheet-page",url:"https://hopamviet.vn/sheet/song/trong-vong-tay-me/W8IUDZCO.html"},
   {id:"hav-nang-toi-va-em",title:"Nắng tôi và em",composer:"Phạm Chinh Đông",genre:"Nhạc Trữ tình",sourceId:"hav",format:"sheet-page",url:"https://hopamviet.vn/sheet/song/nang-toi-va-em/W8IUDZ7A.html"},
   {id:"hav-cho-hoa-than",title:"Chờ được hóa thân",composer:"Nguyễn Hoàng Đô",genre:"Nhạc Trữ tình",sourceId:"hav",format:"sheet-page",url:"https://hopamviet.vn/sheet/song/cho-duoc-hoa-than/W8IUDZ7I.html"},
-  {id:"hav-tho-ngay",title:"Thơ ngây",composer:"Nguyễn Ngọc Tú Anh",genre:"Nhạc Trữ tình",sourceId:"hav",format:"sheet-page",url:"https://hopamviet.vn/sheet/song/tho-ngay/W8IUDZWA.html"}
+  {id:"hav-tho-ngay",title:"Thơ ngây",composer:"Nguyễn Ngọc Tú Anh",genre:"Nhạc Trữ tình",sourceId:"hav",format:"sheet-page",url:"https://hopamviet.vn/sheet/song/tho-ngay/W8IUDZWA.html"},
+  ...youngSheetPages,
 ]);
 export const GENRES = Object.freeze(["Nhạc Vàng","Nhạc Trữ tình","Nhạc Trẻ","Nhạc Quê hương","Nhạc Ngoại lời Việt","Nhạc Đỏ","Nhạc Dân ca","Nhạc Quốc tế","Nhạc Học trò","Nhạc Thiếu nhi","Nhạc Thánh ca","Nhạc Phật giáo","Nhạc Chế - Vui"]);
 

@@ -27,6 +27,14 @@ test("genre and sort controls are deterministic",()=>{
  const az=searchRecords({sort:"az"}),za=searchRecords({sort:"za"});
  assert.deepEqual(az.map(x=>x.id),za.map(x=>x.id).reverse());
 });
+test("young Vietnamese song results keep their source pages and are not counted as PDFs",()=>{
+ const items=searchRecords({genre:"Nhạc Trẻ"});
+ assert.ok(items.length>10);
+ assert.equal(new Set(items.map(s=>s.url)).size,items.length);
+ assert.ok(items.every(s=>s.format==="sheet-page" && safeSourceUrl(s.url)));
+ assert.equal(searchRecords({genre:"Nhạc Trẻ",q:"anh nang cua anh"})[0]?.composer,"Khắc Hưng");
+ assert.equal(searchRecords({genre:"Nhạc Trẻ",kind:"pdf"}).length,0);
+});
 test("exact title plus composer is required for linking",()=>{
  assert.equal(matchSheet({title:"Chiều ngồi bên sông Hoài"}),null);
  assert.equal(matchSheet({title:"Chiều ngồi bên sông Hoài",composer:"Sai tên"}),null);

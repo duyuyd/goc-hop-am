@@ -4,22 +4,23 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#101c2c">
-  <meta name="description" content="Tìm bản phổ PDF và ảnh bản nhạc có nguồn rõ ràng trên Góc Hợp Âm.">
+  <meta name="description" content="Tìm bản phổ PDF, MusicXML và ảnh bản nhạc có nguồn rõ ràng trên Góc Hợp Âm.">
   <title>Kho bản phổ · Góc Hợp Âm</title>
   <link rel="icon" href="/favicon.svg">
   <link rel="stylesheet" href="/music-tools.css?v=143">
-  <link rel="stylesheet" href="/ban-pho/library.css">
+  <link rel="stylesheet" href="/ban-pho/library.css?v=2">
 </head>
 <body>
   <header class="masthead">
     <a class="brand" href="/">Góc Hợp Âm</a>
-    <a class="return" href="/?mode=sheets">Bản phổ theo bài hát</a>
+    <a class="return" href="/sheet/?genre=nhac-tre">Nhạc trẻ</a>
   </header>
   <main>
     <section class="intro" aria-labelledby="title">
       <span class="eyebrow">GÓC HỢP ÂM · THƯ VIỆN</span>
       <h1 id="title">Kho bản phổ mở</h1>
-      <p>Tìm và đọc bản phổ có sẵn từ Mutopia Project và Wikimedia Commons ngay trên Góc Hợp Âm.</p>
+      <p>Tìm và đọc bản phổ từ OpenScore, Mutopia Project và Wikimedia Commons ngay trên Góc Hợp Âm.</p>
+      <p><a href="/?mode=sheets">Bản phổ theo bài hát</a></p>
       <div class="controls">
         <label>Tìm bản phổ
           <input id="search" type="search" placeholder="Tên bản nhạc, tác giả, nhạc cụ…" maxlength="120" autocomplete="off">
@@ -29,6 +30,8 @@
             <option value="">Tất cả nguồn</option>
             <option value="commons">Bản tiếng Việt</option>
             <option value="mutopia">Mutopia Project</option>
+            <option value="lieder">OpenScore Lieder</option>
+            <option value="quartets">OpenScore Tứ tấu</option>
           </select>
         </label>
       </div>
@@ -59,10 +62,13 @@
       <a id="score-license" target="_blank" rel="noopener noreferrer" hidden>Giấy phép</a>
       <a id="score-image-file" target="_blank" rel="noopener" hidden>Mở ảnh gốc</a>
       <a id="score-archive" target="_blank" rel="noopener noreferrer" hidden>Tải ZIP bản phổ</a>
+      <a id="score-mxl-file" download hidden>Tải MusicXML gốc</a>
     </div>
     <div id="score-pdf"></div>
+    <p id="xml-status" role="status" aria-live="polite" hidden></p>
+    <div id="score-xml" hidden></div>
     <img id="score-image" alt="" hidden>
   </dialog>
-  <script type="module" src="/ban-pho/library.js"></script>
+  <script type="module" src="/ban-pho/library.js?v=2"></script>
 </body>
 </html>

@@ -8,44 +8,101 @@ const collection = byId('collection');
 const viewer = byId('viewer');
 const scoreImage = byId('score-image');
 const archive = byId('score-archive');
-const sourceNames = {commons: 'Wikimedia Commons', mutopia: 'Mutopia Project'};
+const pdfHost = byId('score-pdf');
+const xmlHost = byId('score-xml');
+const xmlStatus = byId('xml-status');
+const sourceNames = {commons: 'Wikimedia Commons', mutopia: 'Mutopia Project', lieder: 'OpenScore Lieder', quartets: 'OpenScore Tứ tấu'};
+const openScorePages = {
+  lieder: 'https://fourscoreandmore.org/openscore/lieder/',
+  quartets: 'https://fourscoreandmore.org/openscore/stringquartets/',
+};
 const normalize = value => foldText(value).replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 const pageSize = 24;
-let items = [], filtered = [], page = 0, selected = null;
+let items = [], filtered = [], page = 0, selected = null, xmlRequest = 0, xmlEngine;
+const scorePath = score => '/api/open-sheet?' + new URLSearchParams({id: score.id});
 const pdfReader = createSongSheet({
-  host: byId('score-pdf'), getSong: () => selected, rawPdf: true,
-  getSheetPath: score => score ? '/api/open-sheet?' + new URLSearchParams({id: score.id}) : '',
+  host: pdfHost, getSong: () => selected, rawPdf: true,
+  getSheetPath: score => score ? scorePath(score) : '',
   onMetadata(meta) {
     archive.hidden = !meta.archive;
     if (meta.archive) archive.href = meta.archive;
+    pdfHost.classList.toggle('has-parts', (meta.files?.length || 0) > 1);
   },
 });
 
+function loadXmlEngine() {
+  if (!xmlEngine) {
+    xmlEngine = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = '/ban-pho/vendor/opensheetmusicdisplay-2.3.0.min.js';
+      script.onload = () => {
+        const Renderer = window.opensheetmusicdisplay?.OpenSheetMusicDisplay;
+        if (Renderer) resolve(Renderer);
+        else reject(new Error('Bộ đọc MusicXML chưa sẵn sàng.'));
+      };
+      script.onerror = () => reject(new Error('Chưa tải được bộ đọc MusicXML.'));
+      document.head.append(script);
+    }).catch(error => { xmlEngine = null; throw error; });
+  }
+  return xmlEngine;
+}
+
+async function renderXml(score, path, request) {
+  xmlStatus.textContent = 'Đang đọc bản phổ MusicXML…';
+  try {
+    const Renderer = await loadXmlEngine();
+    if (request !== xmlRequest) return;
+    const notation = document.createElement('div');
+    xmlHost.replaceChildren(notation);
+    const renderer = new Renderer(notation, {backend: 'svg', autoResize: false, drawTitle: true});
+    await renderer.load(path);
+    if (request !== xmlRequest || selected !== score) return;
+    renderer.render();
+    xmlStatus.textContent = 'Bản phổ MusicXML từ OpenScore.';
+  } catch {
+    if (request === xmlRequest) xmlStatus.textContent = 'Chưa hiển thị được bản phổ. Có thể tải MusicXML gốc.';
+  }
+}
+
 function openScore(score) {
+  const request = ++xmlRequest;
   selected = score;
   pdfReader.setSong();
   const isPdf = score.format === 'pdf';
+  const isXml = score.format === 'mxl';
+  const isImage = !isPdf && !isXml;
+  const isOpenScore = Object.hasOwn(openScorePages, score.source);
   byId('score-title').textContent = score.title;
-  byId('score-credit').textContent = [score.author, sourceNames[score.source], score.license].filter(Boolean).join(' · ');
-  byId('score-source').href = score.sourceUrl ||
+  byId('score-credit').textContent = [score.author, sourceNames[score.source], score.license || (isOpenScore ? 'CC0 1.0' : '')].filter(Boolean).join(' · ');
+  byId('score-source').href = score.sourceUrl || openScorePages[score.source] ||
     'https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=' + score.id.slice('mutopia-'.length);
   const license = byId('score-license');
-  license.hidden = !score.licenseUrl;
-  if (score.licenseUrl) license.href = score.licenseUrl;
+  license.hidden = !score.licenseUrl && !isOpenScore;
+  if (!license.hidden) license.href = score.licenseUrl || 'https://creativecommons.org/publicdomain/zero/1.0/';
   const imageLink = byId('score-image-file');
   archive.hidden = true;
-  imageLink.hidden = isPdf;
-  scoreImage.hidden = isPdf;
-  if (!isPdf) {
+  pdfHost.classList.remove('has-parts');
+  imageLink.hidden = scoreImage.hidden = !isImage;
+  xmlHost.hidden = xmlStatus.hidden = byId('score-mxl-file').hidden = !isXml;
+  xmlHost.replaceChildren();
+  if (isImage) {
     scoreImage.alt = 'Bản phổ ' + score.title;
     imageLink.href = scoreImage.src = new URL(score.asset, location.origin + '/ban-pho/').href;
   }
   viewer.showModal();
   if (isPdf) pdfReader.open();
+  if (isXml) {
+    const path = location.origin + scorePath(score) + '&file=0&download=1&name=' + score.id + '.mxl';
+    byId('score-mxl-file').href = path;
+    renderXml(score, path, request);
+  }
 }
 
 viewer.onclose = () => {
+  if (viewer.open) return;
+  ++xmlRequest;
   pdfReader.setSong();
+  xmlHost.replaceChildren();
   scoreImage.removeAttribute('src');
   selected = null;
 };
@@ -64,7 +121,7 @@ function render() {
     details.textContent = [score.author, score.opus, score.instrument, sourceNames[score.source]].filter(Boolean).join(' · ');
     const badge = document.createElement('span');
     badge.className = 'badge';
-    badge.textContent = score.format === 'pdf' ? 'PDF' : 'Ảnh';
+    badge.textContent = {pdf: 'PDF', mxl: 'MusicXML', png: 'Ảnh'}[score.format] || 'Bản phổ';
     button.append(heading, details, badge);
     button.onclick = () => openScore(score);
     li.append(button);
@@ -103,7 +160,7 @@ async function load() {
     if (!response.ok) throw new Error('catalog_unavailable');
     const catalog = await response.json();
     items = catalog.items.map(score => ({
-      ...score, searchText: normalize([score.title, score.author, score.opus, score.instrument].filter(Boolean).join(' ')),
+      ...score, searchText: normalize([score.title, score.author, score.lyricist, score.opus, score.instrument].filter(Boolean).join(' ')),
     }));
     for (const option of collection.options) {
       const count = option.value ? items.filter(score => score.source === option.value).length : items.length;
