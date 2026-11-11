@@ -166,7 +166,7 @@ document.addEventListener('click',e=>{const o=e.target.closest('[data-open]'),s=
  if(jump){closeMenu();$(jump.dataset.jump)?.scrollIntoView({behavior:'smooth'});$(jump.dataset.jump)?.focus({preventScroll:true})}
  if(e.target.closest('#clear-results'))reset();if(e.target.closest('#retry'))load({force:true});if(e.target.closest('#reader-retry')&&current)openSong(current.id,{force:true});
 });
-function setup(data){home=data;genres=data.genres||[];data.items.forEach(s=>registry.set(s.id,s));$('total').textContent=data.inventory?format(data.inventory):'Toàn kho';$('total').title='Số bài tại nguồn · '+new Date(data.checkedAt).toLocaleString('vi-VN');
+function setup(data){home=data;genres=data.genres||[];data.items.forEach(s=>registry.set(s.id,s)); // D1 widget owns the verified homepage count.
  $('featured').innerHTML=(data.featured||[]).slice(0,18).map(s=>`<button class="card" data-open="${esc(s.id)}"><div class="art">${s.thumbnail?`<img loading="lazy" src="${esc(s.thumbnail)}" alt="${esc(s.title)}">`:esc(s.title)}<span>▶</span></div><div class="cardbody"><h3>${esc(s.title)}</h3><p class="meta">${esc(s.author)}</p><p class="meta">${esc(s.singer)}</p><div class="tag">Mở lời & hợp âm ›</div></div></button>`).join('');
  $('genres').innerHTML='<button class="chip active" data-genre="">♫ Tất cả</button>'+genres.map(g=>`<button class="chip" data-genre="${g.id}">${g.icon} ${esc(g.name)}</button>`).join('');
  $('menu-genres').innerHTML=genres.map(g=>`<button data-genre="${g.id}"><span aria-hidden="true">${g.icon}</span> ${esc(g.name)}</button>`).join('');
