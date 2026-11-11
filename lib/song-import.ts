@@ -152,7 +152,7 @@ export function parseSongImport(source: string, format: 'csv' | 'json'): Importe
     ]);
     const suffix = sheetKey ? sheetKey.slice('sheets/'.length + slug.length) : '';
     if (sheetKey && (!sheetKey.startsWith('sheets/' + slug + '.') ||
-        !/^\\.(pdf|png|jpe?g|webp|xml|musicxml|mxl)$/.test(suffix) ||
+        !/^\.(pdf|png|jpe?g|webp|xml|musicxml|mxl)$/.test(suffix) ||
         !mimeAllowlist.has(sheetMime))) {
       throw new AppError(400, `Bài ${i + 1} có R2 asset key/mime không hợp lệ.`);
     }
