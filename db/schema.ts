@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, uniqueIndex, index } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
 export const accounts = sqliteTable('accounts', {
  id:text('id').primaryKey(), username:text('username').notNull().unique(), name:text('name').notNull(),
@@ -27,3 +27,31 @@ export const storeProducts=sqliteTable('store_products',{
 export const storeOrders=sqliteTable('store_orders',{
  id:text('id').primaryKey(),accountId:text('account_id').notNull().references(()=>accounts.id),productId:text('product_id').notNull().references(()=>storeProducts.id),title:text('title').notNull(),amountVnd:integer('amount_vnd').notNull(),status:text('status').notNull().default('pending'),paymentRef:text('payment_ref').notNull().default(''),buyerNote:text('buyer_note').notNull().default(''),adminNote:text('admin_note').notNull().default(''),reviewedBy:text('reviewed_by').references(()=>accounts.id),createdAt:integer('created_at').notNull(),updatedAt:integer('updated_at').notNull(),reviewedAt:integer('reviewed_at')
 },table=>[uniqueIndex('one_open_order').on(table.accountId,table.productId).where(sql`${table.status} in ('pending','review')`)]);
+
+/** Independently imported, verifiable song catalogue. Existing community_songs is preserved. */
+export const songs = sqliteTable('songs', {
+  id: text('id').primaryKey(),
+  title: text('title').notNull(),
+  artist: text('artist').notNull().default(''),
+  slug: text('slug').notNull().unique(),
+  chordsText: text('chords_text').notNull().default(''),
+  lyricsText: text('lyrics_text').notNull().default(''),
+  hasPdf: integer('has_pdf').notNull().default(0),
+  pdfUrl: text('pdf_url'),
+  sourceName: text('source_name').notNull().default('Tệp nhập'),
+  createdAt: integer('created_at').notNull(),
+}, table => [
+  index('songs_title_idx').on(table.title),
+  index('songs_artist_idx').on(table.artist),
+  index('songs_created_at_idx').on(table.createdAt),
+]);
+
+export const syncLogs = sqliteTable('sync_logs', {
+  id: text('id').primaryKey(),
+  totalFetched: integer('total_fetched').notNull().default(0),
+  status: text('status').notNull(),
+  errorMessage: text('error_message'),
+  syncedAt: integer('synced_at').notNull(),
+}, table => [
+  index('sync_logs_synced_at_idx').on(table.syncedAt),
+]);
