@@ -25,6 +25,13 @@ def main() -> None:
         "added": 0, "accepted": 0, "total": None,
         "errors": ["Chưa chạy đồng bộ hoặc chưa có báo cáo"],
     }
+    collection_path = Path("automation/collection_report.json")
+    if collection_path.exists():
+        collection = json.loads(collection_path.read_text(encoding="utf-8"))
+        if collection.get("blocked"):
+            data.setdefault("errors", []).extend(
+                "Source stopped: " + message[:140] for message in collection["blocked"][:3]
+            )
     body = render(data)
     print(body)
     step_summary = os.environ.get("GITHUB_STEP_SUMMARY")
