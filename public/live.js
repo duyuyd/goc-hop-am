@@ -170,12 +170,12 @@ function setup(data){home=data;genres=data.genres||[];data.items.forEach(s=>regi
  $('featured').innerHTML=(data.featured||[]).slice(0,18).map(s=>`<button class="card" data-open="${esc(s.id)}"><div class="art">${s.thumbnail?`<img loading="lazy" src="${esc(s.thumbnail)}" alt="${esc(s.title)}">`:esc(s.title)}<span>▶</span></div><div class="cardbody"><h3>${esc(s.title)}</h3><p class="meta">${esc(s.author)}</p><p class="meta">${esc(s.singer)}</p><div class="tag">Mở lời & hợp âm ›</div></div></button>`).join('');
  $('genres').innerHTML='<button class="chip active" data-genre="">♫ Tất cả</button>'+genres.map(g=>`<button class="chip" data-genre="${g.id}">${g.icon} ${esc(g.name)}</button>`).join('');
  $('menu-genres').innerHTML=genres.map(g=>`<button data-genre="${g.id}"><span aria-hidden="true">${g.icon}</span> ${esc(g.name)}</button>`).join('');
- const artists=['Trịnh Công Sơn','Anh Bằng','Lam Phương','Ngô Thụy Miên','Phạm Duy','Hoàng Dũng','Đức Trí','Đông Thiên Đức','Trần Thiện Thanh','Vũ Thành An'];
+ const artists=[...new Set([...(data.items||[]),...(data.featured||[])].map(song=>song.author||song.singer).filter(Boolean))].slice(0,10);
  $('artists').innerHTML=artists.map(a=>`<button class="artist" data-artist="${esc(a)}"><div class="avatar">${esc(a.split(' ').map(x=>x[0]).slice(-2).join(''))}</div>${esc(a)}</button>`).join('');
 }
 async function refreshHome(){try{const response=await fetch('/api/catalog?mode=home');if(!response.ok)return;const data=await response.json();if(!data.items?.length)return;setup(data);filters();if(state.mode==='home'&&!state.q&&!state.genre)draw(data)}catch{}}
 (async()=>{
- try{const response=await fetch('/catalog-seed.json');if(response.ok)setup(await response.json())}catch{}
+ // Read live catalog only. Seed/example JSON is not used for production rendering.
  const p=new URLSearchParams(location.search),shared=valid(p.get('song')),songId=location.hash.match(/^#bai\/([A-Za-z0-9_-]+)$/)?.[1];
  state={q:(p.get('q')||'').slice(0,120),type:['title','singer','composer'].includes(p.get('type'))?p.get('type'):'title',genre:genres.some(g=>String(g.id)===p.get('genre'))?p.get('genre'):'',mode:['home','search','browse','hot','latest','favorites','offline','sheets'].includes(p.get('mode'))?p.get('mode'):'home',page:Math.max(0,Math.min(2000,parseInt(p.get('page')||'0',10)||0))};
  if(state.mode!=='offline'){if(state.q)state.mode='search';else if(state.genre)state.mode='browse'}
