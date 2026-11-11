@@ -9,6 +9,9 @@ export type ImportedSong = {
   lyrics_text: string;
   has_pdf: number;
   pdf_url: string | null;
+  sheet_key: string | null;
+  sheet_mime: string | null;
+  sheet_url: string | null;
   source_name: string;
   created_at: number;
 };
@@ -139,9 +142,25 @@ export function parseSongImport(source: string, format: 'csv' | 'json'): Importe
       }
     }
 
+    const sheetKey = stringField(get(item, 'sheet_key'), 240, 'sheet_key');
+    const sheetMime = stringField(get(item, 'sheet_mime'), 100, 'sheet_mime');
+    const mimeAllowlist = new Set([
+      'application/pdf', 'image/png', 'image/jpeg', 'image/webp',
+      'application/xml', 'text/xml', 'application/vnd.recordare.musicxml',
+      'application/vnd.recordare.musicxml+xml',
+      'application/vnd.recordare.musicxml+zip',
+    ]);
+    const suffix = sheetKey ? sheetKey.slice('sheets/'.length + slug.length) : '';
+    if (sheetKey && (!sheetKey.startsWith('sheets/' + slug + '.') ||
+        !/^\\.(pdf|png|jpe?g|webp|xml|musicxml|mxl)$/.test(suffix) ||
+        !mimeAllowlist.has(sheetMime))) {
+      throw new AppError(400, `Bài ${i + 1} có R2 asset key/mime không hợp lệ.`);
+    }
+    if (!sheetKey && sheetMime) throw new AppError(400, 'sheet_mime phải đi kèm sheet_key.');
     const flag = get(item, 'has_pdf');
-    const hasPdf = flag === true || flag === 1 || /^(true|yes|1)$/i.test(String(flag ?? '')) || !!pdfUrl;
-    if (hasPdf && !pdfUrl) throw new AppError(400, `Bài ${i + 1} báo có PDF nhưng thiếu pdf_url.`);
+    const pdfInR2 = sheetKey && sheetMime === 'application/pdf';
+    const hasPdf = flag === true || flag === 1 || /^(true|yes|1)$/i.test(String(flag ?? '')) || !!pdfUrl || !!pdfInR2;
+    if (hasPdf && !pdfUrl && !pdfInR2) throw new AppError(400, `Bài ${i + 1} báo có PDF nhưng thiếu pdf_url hoặc PDF trong R2.`);
     return {
       id: crypto.randomUUID(),
       title,
@@ -151,6 +170,9 @@ export function parseSongImport(source: string, format: 'csv' | 'json'): Importe
       lyrics_text: lyrics,
       has_pdf: hasPdf ? 1 : 0,
       pdf_url: pdfUrl || null,
+      sheet_key: sheetKey || null,
+      sheet_mime: sheetKey ? sheetMime : null,
+      sheet_url: sheetKey ? '/api/sheets/' + slug : null,
       source_name: stringField(get(item, 'source_name', 'source'), 100, 'source_name') || 'Tệp nhập',
       created_at: now,
     };
