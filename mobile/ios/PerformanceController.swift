@@ -29,8 +29,15 @@ final class PerformanceController: NSObject, AVCaptureFileOutputRecordingDelegat
     private func newFile(_ ext: String) throws -> URL { try folder().appendingPathComponent("GocHopAm-\(Int(Date().timeIntervalSince1970 * 1000))-\(UUID().uuidString.prefix(8)).\(ext)") }
     private func validFile(_ name: String) throws -> URL {
         guard name.range(of: "^GocHopAm-[A-Za-z0-9.-]+\\.(mp4|m4a|webm)$", options: .regularExpression) != nil else { throw URLError(.badURL) }
-        let file = try folder().appendingPathComponent(name)
-        guard FileManager.default.fileExists(atPath: file.path) else { throw URLError(.fileDoesNotExist) }
+        // Find by exact basename among files already enumerated inside our private
+        // recording directory; never construct a disk path from bridge-supplied text.
+        let items = try FileManager.default.contentsOfDirectory(
+            at: folder(), includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey],
+            options: [.skipsHiddenFiles]
+        )
+        guard let file = items.first(where: { $0.lastPathComponent == name }) else { throw URLError(.fileDoesNotExist) }
+        let values = try file.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+        guard values.isRegularFile == true && values.isSymbolicLink != true else { throw URLError(.badURL) }
         return file
     }
     func handle(id: String, action: String, args: [String: Any]) -> Bool {

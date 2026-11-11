@@ -201,7 +201,7 @@ export function createMusicTools({native=false,call=async()=>true,toast=()=>{},g
   data.activeSheet=globalThis.crypto?.randomUUID?.()||Date.now()+'-'+Math.random().toString(36).slice(2);
   data.savedSheets.push({id:data.activeSheet,score:data.score});
  }
- function useDraft(value,text){
+ function applyDraft(value,text){
   const draft=cleanScore(value);
   rememberScore();
   data.activeSheet='';
@@ -348,20 +348,20 @@ export function createMusicTools({native=false,call=async()=>true,toast=()=>{},g
    stop();
    const shift=getShift();
    const draft=chordAccompaniment(getSong(),instrument,{transpose:symbol=>shift?transpose(symbol,shift):symbol,chord:musicChord,bpm:data.score.bpm});
-   useDraft(draft,'Đã tạo bè đệm '+instrument+'. Mỗi hợp âm một ô nhịp.');
+   applyDraft(draft,'Đã tạo bè đệm '+instrument+'. Mỗi hợp âm một ô nhịp.');
   }catch(error){message(error.message)}
  };
  el('music-import-midi').onclick=()=>loadDraft(async()=>{
   const file=await readMusicAudio({native,call,kind:'midi'});
   if(!file)return;
   const draft=midiToSheet(file.bytes,file.name);
-  useDraft(draft,'Đã đọc MIDI · độ lệch lưới '+draft.maxError.toFixed(3).replace('.',',')+' phách.');
+  applyDraft(draft,'Đã đọc MIDI · độ lệch lưới '+draft.maxError.toFixed(3).replace('.',',')+' phách.');
  });
  el('music-import-xml').onclick=()=>loadDraft(async()=>{
   const file=await readMusicAudio({native,call,kind:'musicxml'});
   if(!file)return;
   const text=new TextDecoder('utf-8',{fatal:true}).decode(file.bytes);
-  useDraft(musicXmlToSheet(text,file.name),'Đã nhập MusicXML.');
+  applyDraft(musicXmlToSheet(text,file.name),'Đã nhập MusicXML.');
  });
  el('music-transcribe').onclick=()=>loadDraft(async()=>{
   const file=await readMusicAudio({native,call});
@@ -374,7 +374,7 @@ export function createMusicTools({native=false,call=async()=>true,toast=()=>{},g
    try{decoded=await ctx.decodeAudioData(file.bytes)}
    catch{throw new Error('Thiết bị chưa đọc được tệp này. Thử WAV, MP3 hoặc M4A.')}
    const result=await transcribeMusicAudio(decoded,{bpm,start,onProgress(percent){el('music-job-status').textContent='Đang nhận nốt '+percent+'%'}});
-   useDraft({title:file.name,author:'',bpm,notes:result.notes,origin:'audio-draft'},'Đã tạo sheet nháp '+result.notes.length+' nốt/dấu lặng. '+(result.limited?'Đã giới hạn đoạn ở 60 giây hoặc 128 nốt.':'Nghe lại và đối chiếu.'));
+   applyDraft({title:file.name,author:'',bpm,notes:result.notes,origin:'audio-draft'},'Đã tạo sheet nháp '+result.notes.length+' nốt/dấu lặng. '+(result.limited?'Đã giới hạn đoạn ở 60 giây hoặc 128 nốt.':'Nghe lại và đối chiếu.'));
   }finally{stop()}
  });
  el('music-import').onclick=()=>loadDraft(async()=>{
@@ -382,7 +382,7 @@ export function createMusicTools({native=false,call=async()=>true,toast=()=>{},g
   if(!text)return;
   const parsed=JSON.parse(text);
   if(parsed?.format!=='goc-score-1'||!Array.isArray(parsed.notes))throw new Error('Cần tệp sheet Góc Hợp Âm đã xuất.');
-  useDraft(parsed,'Đã mở tệp sheet JSON.');
+  applyDraft(parsed,'Đã mở tệp sheet JSON.');
  });
  el('music-practice-notes').value=data.notes;el('music-practice-notes').oninput=()=>{data.notes=el('music-practice-notes').value;save()};el('music-log').onclick=()=>{const minutes=Math.round(Number(el('music-minutes').value));if(!Number.isFinite(minutes)||minutes<1||minutes>600){message('Nhập thời gian tập từ 1 đến 600 phút.');return}data.sessions.push({date:new Date().toISOString(),minutes});data.sessions=data.sessions.slice(-30);save();sessions();message('Đã lưu buổi tập trên thiết bị.')};
  document.addEventListener('visibilitychange',()=>{if(document.hidden&&!picking)stop()});el('music-quality').value='';el('music-note').value='60';chord();score();sessions();

@@ -42,8 +42,8 @@
     "zod": "4.6.7"
   },
   "devDependencies": {
-    "@cloudflare/vite-plugin": "1.37.1",
-    "@cloudflare/workers-types": "4.20260515.1",
+    "@cloudflare/vite-plugin": "1.68.0",
+    "@cloudflare/workers-types": "5.20261110.1",
     "@tailwindcss/postcss": "4.2.1",
     "@types/node": "22.19.19",
     "@types/react": "19.2.14",
@@ -61,7 +61,7 @@
     "typescript": "5.9.3",
     "vinext": "1.0.0-beta.5",
     "vite": "8.3.5",
-    "wrangler": "4.92.0"
+    "wrangler": "4.120.0"
   },
   "type": "module",
   "overrides": {
@@ -73,6 +73,12 @@
     "baseline-browser-mapping": "2.11.0",
     "image-size": "2.0.3",
     "satori": "0.33.5",
-    "fflate@^0.7.0": "0.7.5"
+    "fflate@^0.7.0": "0.7.5",
+    "undici": "7.30.2",
+    "ws": "8.22.2",
+    "esbuild": "0.28.2",
+    "@typescript-eslint/typescript-estree": {
+      "minimatch": "11.0.1"
+    }
   }
 }

@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     ".sites-runtime/**",
     "outputs/**",
     "work/**",
+    "public/mobile/vendor/pdf-engine.js", // prebuilt, minified vendor bundle
+    "public/ban-pho/vendor/opensheetmusicdisplay-2.3.0.min.js", // prebuilt OSMD bundle
   ]),
   {
     files: ["components/ui/**/*.{ts,tsx}", "hooks/use-mobile.ts"],

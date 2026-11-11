@@ -8,6 +8,12 @@ const song=parseSong(html,url);
 assert.equal(song.title,'Bài thử & kiểm tra');assert.equal(song.key,'Am');assert.equal(song.author,'Nhạc sĩ thử');assert.equal(song.rhythm,'Rhumba');
 assert.match(song.content,/\[Am\]/);assert.match(song.content,/\nĐoạn thứ hai/);assert.match(song.content,/\n\nTiếp/);
 assert.ok(!/EVIL|UNWANTED|<|javascript:/.test(song.content));
+const hostileHtml='<h1>Bài thử</h1><div id="lyric-version-0">Mở đầu [C]<script>EVIL_1<script>EVIL_2</script>EVIL_3</script><style>EVIL_CSS</style><!--EVIL_COMMENT--><div>Đoạn sau [G]</div><iframe>EVIL_FRAME</iframe></div>';
+const hostile=parseSong(hostileHtml,url);
+assert.match(hostile.content,/Mở đầu \[C\]/);
+assert.match(hostile.content,/Đoạn sau \[G\]/);
+assert.ok(!/EVIL|script|iframe|style|<!--/.test(hostile.content));
+
 assert.throws(()=>parseSong('<h1>Missing lyrics</h1>',url),/layout/);
 let calls=0;const fetcher=async()=>{calls++;return new Response(html)};
 assert.equal((await readSong(url,fetcher)).id,'TESTID01');await readSong(url,fetcher);assert.equal(calls,1);
