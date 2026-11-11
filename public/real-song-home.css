@@ -1,0 +1,37 @@
+#real-song-panel {
+  --real-background: #0a0f18;
+  --real-card: #121a26;
+  --real-line: #263142;
+  --real-orange: #ff9f43;
+  margin: 0 0 25px;
+  padding: 24px;
+  background: var(--real-background);
+  border: 1px solid var(--real-line);
+  border-radius: 12px;
+  color: #f8fafc;
+}
+#real-song-panel .real-d1-head { display: flex; align-items: start; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+#real-song-panel .real-d1-eyebrow { display: block; font-size: 11px; font-weight: 700; letter-spacing: .1em; color: var(--real-orange); margin-bottom: 6px; }
+#real-song-panel h2 { font-size: 22px; margin: 0; color: #f8fafc; }
+#real-song-panel #real-d1-stats { color: #ffc48d; margin-top: 7px; font-size: 13px; }
+#real-song-panel .real-d1-all { color: var(--real-orange); font-size: 13px; }
+#real-song-panel #real-d1-search { margin: 16px 0; }
+#real-song-panel #real-d1-search label { display: block; color: #94a3b8; font-size: 12px; margin-bottom: 6px; }
+#real-song-panel #real-d1-search div { display: flex; background: var(--real-card); border: 1px solid var(--real-line); border-radius: 9px; padding: 4px; }
+#real-song-panel #real-d1-keyword { min-width: 0; flex: 1; padding: 10px; color: white; background: none; border: none; outline: none; }
+#real-song-panel button { border: none; border-radius: 7px; background: var(--real-orange); color: #1a1005; font-weight: 700; padding: 8px 14px; }
+#real-song-panel button:disabled { opacity: .45; cursor: default; }
+#real-song-panel #real-d1-message { font-size: 13px; color: #a1b3c8; margin: 8px 0; }
+#real-song-panel .real-d1-results { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+#real-song-panel .real-d1-row { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 13px; background: var(--real-card); border: 1px solid var(--real-line); border-radius: 9px; }
+#real-song-panel .real-d1-icon { color: var(--real-orange); font-size: 23px; }
+#real-song-panel .real-d1-content { min-width: 0; flex: 1; }
+#real-song-panel .real-d1-content a, #real-song-panel .real-d1-content strong { display: block; font-size: 14px; font-weight: 700; overflow-wrap: anywhere; color: #fff; }
+#real-song-panel .real-d1-content p { font-size: 12px; color: #a2b3c5; margin-top: 3px; }
+#real-song-panel .real-d1-open { color: var(--real-orange); white-space: nowrap; font-size: 12px; }
+#real-song-panel #real-d1-pagination { display: flex; justify-content: center; align-items: center; gap: 14px; margin-top: 20px; }
+#real-song-panel #real-d1-pagination[hidden] { display: none; }
+@media (max-width: 700px) {
+  #real-song-panel { padding: 15px; }
+  #real-song-panel .real-d1-results { grid-template-columns: 1fr; }
+}
