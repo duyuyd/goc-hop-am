@@ -5,7 +5,7 @@
 
 #lyrics[hidden],#reader-lyrics[hidden]{display:none!important}
 
-.ss-real-score{max-width:100%;overflow:auto;border-radius:10px;background:#fff;min-height:60px}.ss-real-score canvas{display:block;width:100%;height:auto;min-width:0}.ss-source{font-size:11px;color:#b7b5ba}.song-sheet .ss-options{margin-top:10px}
+.ss-real-score{max-width:100%;overflow:auto;border-radius:10px;background:#fff;min-height:60px}.ss-real-score canvas{display:block;width:100%;height:auto;min-width:0}.ss-source{font-size:11px;color:#b7b5ba}.song-sheet .ss-options{margin-top:10px}.song-sheet .ss-options[hidden]{display:none}
 
 .music-tools .music-download{display:inline-flex;align-items:center;min-height:44px;padding:9px 12px;border:1px solid var(--m-border);border-radius:12px;color:inherit;background:#2e233b;text-decoration:none}
 

@@ -33,12 +33,11 @@ export async function GET(request: Request) {
 
   try {
     if (score.file && Object.hasOwn(openScoreSources, score.source)) {
-      const source = openScoreSources[score.source];
-      const extension = score.source === 'lieder' ? 'mxl' : 'pdf';
-      const editions = [{url: score.file, name: extension === 'pdf' ? 'Tổng phổ' : 'MusicXML'}, ...(score.parts || [])];
+      const extension = score.format === 'mxl' ? 'mxl' : 'pdf';
+      const editions = [{url: score.file, name: extension === 'pdf' || score.source === 'orchestra' ? 'Tổng phổ' : 'MusicXML'}, ...(score.parts || [])];
       if (!fileRequested) return Response.json({
         available: true, files: editions.map(({name}, index) => ({index, name})),
-        credit: [source.name, score.author, score.lyricist, 'CC0 1.0'].filter(Boolean).join(' · '),
+        credit: [score.author, score.lyricist, 'CC0 1.0'].filter(Boolean).join(' · '),
       }, {headers: cacheHeaders});
 
       const url = openScoreFile(editions[file]?.url, score.source, extension);
@@ -57,7 +56,7 @@ export async function GET(request: Request) {
       if (fileRequested) return Response.redirect(new URL('/ban-pho/' + score.asset, request.url), 302);
       return Response.json({
         available: true, files: [{index: 0, name: score.title}],
-        credit: `Wikimedia Commons · ${score.author} · ${score.license}`,
+        credit: [score.author, score.license].filter(Boolean).join(' · '),
       }, {headers: cacheHeaders});
     }
     const edition = await mutopiaEdition(score.id);
@@ -69,7 +68,7 @@ export async function GET(request: Request) {
       available: !!edition.pdf, files: edition.pdf ? [{index: 0, name: score.title}] : [],
       archive: edition.archive,
       reason: edition.pdf ? '' : 'Nguồn cung cấp tổng phổ và các bè trong một gói ZIP chứa PDF.',
-      credit: ['Mutopia Project', score.author, edition.maintainer && 'Bản khắc: ' + edition.maintainer, edition.license].filter(Boolean).join(' · '),
+      credit: [score.author, edition.maintainer && 'Bản khắc ' + edition.maintainer, edition.license].filter(Boolean).join(' · '),
     }, {headers: cacheHeaders});
   } catch {
     return failure('Nguồn bản phổ chưa phản hồi. Hãy thử lại hoặc mở trang nguồn.', 502);

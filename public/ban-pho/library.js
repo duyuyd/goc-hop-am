@@ -1,5 +1,5 @@
 import {foldText} from '../text.js';
-import {createSongSheet} from '../mobile/song-sheet.js?v=144';
+import {createSongSheet} from '../mobile/song-sheet.js?v=145';
 
 const byId = id => document.getElementById(id);
 const format = count => count.toLocaleString('vi-VN');
@@ -11,10 +11,11 @@ const archive = byId('score-archive');
 const pdfHost = byId('score-pdf');
 const xmlHost = byId('score-xml');
 const xmlStatus = byId('xml-status');
-const sourceNames = {commons: 'Wikimedia Commons', mutopia: 'Mutopia Project', lieder: 'OpenScore Lieder', quartets: 'OpenScore Tứ tấu'};
+const xmlEdition = byId('xml-edition');
 const openScorePages = {
   lieder: 'https://fourscoreandmore.org/openscore/lieder/',
   quartets: 'https://fourscoreandmore.org/openscore/stringquartets/',
+  orchestra: 'https://fourscoreandmore.org/openscore/orchestra/',
 };
 const normalize = value => foldText(value).replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 const pageSize = 24;
@@ -58,14 +59,21 @@ async function renderXml(score, path, request) {
     await renderer.load(path);
     if (request !== xmlRequest || selected !== score) return;
     renderer.render();
-    xmlStatus.textContent = 'Bản phổ MusicXML từ OpenScore.';
+    xmlStatus.textContent = 'Bản phổ MusicXML đã mở.';
   } catch {
     if (request === xmlRequest) xmlStatus.textContent = 'Chưa hiển thị được bản phổ. Có thể tải MusicXML gốc.';
   }
 }
 
+function showXml(score, edition) {
+  const path = location.origin + scorePath(score) + '&file=' + edition + '&download=1&name=' + score.id + '.mxl';
+  byId('score-mxl-file').href = path;
+  xmlHost.replaceChildren();
+  renderXml(score, path, ++xmlRequest);
+}
+
 function openScore(score) {
-  const request = ++xmlRequest;
+  ++xmlRequest;
   selected = score;
   pdfReader.setSong();
   const isPdf = score.format === 'pdf';
@@ -73,7 +81,7 @@ function openScore(score) {
   const isImage = !isPdf && !isXml;
   const isOpenScore = Object.hasOwn(openScorePages, score.source);
   byId('score-title').textContent = score.title;
-  byId('score-credit').textContent = [score.author, sourceNames[score.source], score.license || (isOpenScore ? 'CC0 1.0' : '')].filter(Boolean).join(' · ');
+  byId('score-credit').textContent = [score.author, score.lyricist, score.license || (isOpenScore ? 'CC0 1.0' : '')].filter(Boolean).join(' · ');
   byId('score-source').href = score.sourceUrl || openScorePages[score.source] ||
     'https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=' + score.id.slice('mutopia-'.length);
   const license = byId('score-license');
@@ -84,6 +92,7 @@ function openScore(score) {
   pdfHost.classList.remove('has-parts');
   imageLink.hidden = scoreImage.hidden = !isImage;
   xmlHost.hidden = xmlStatus.hidden = byId('score-mxl-file').hidden = !isXml;
+  byId('xml-edition-field').hidden = !isXml || !score.parts?.length;
   xmlHost.replaceChildren();
   if (isImage) {
     scoreImage.alt = 'Bản phổ ' + score.title;
@@ -92,11 +101,34 @@ function openScore(score) {
   viewer.showModal();
   if (isPdf) pdfReader.open();
   if (isXml) {
-    const path = location.origin + scorePath(score) + '&file=0&download=1&name=' + score.id + '.mxl';
-    byId('score-mxl-file').href = path;
-    renderXml(score, path, request);
+    xmlEdition.replaceChildren(new Option('Tổng phổ', '0'), ...(score.parts || []).map((part, index) => new Option(part.name, String(index+1))));
+    showXml(score, 0);
   }
 }
+xmlEdition.onchange = () => { if (selected?.format === 'mxl') showXml(selected, Number(xmlEdition.value)); };
+
+const localViewer = byId('local-viewer');
+const localFile = byId('local-file');
+const localButton = byId('mo-pdf');
+const localReader = createSongSheet({host: byId('local-score-pdf')});
+localViewer.onclose = localReader.setSong;
+localButton.onclick = () => localFile.click();
+localFile.onchange = async () => {
+  const file = localFile.files?.[0];
+  localFile.value = '';
+  if (!file) return;
+  localButton.disabled = true;
+  byId('local-status').textContent = '';
+  try {
+    if (file.size > 8000000) throw new Error('Chọn PDF tối đa 8 MB.');
+    const bytes = await file.arrayBuffer();
+    localViewer.showModal();
+    await localReader.openLocal(bytes, file.name);
+  } catch (error) {
+    localViewer.close();
+    byId('local-status').textContent = error.message || 'Chưa mở được PDF.';
+  } finally { localButton.disabled = false; }
+};
 
 viewer.onclose = () => {
   if (viewer.open) return;
@@ -118,7 +150,7 @@ function render() {
     heading.textContent = score.title;
     const details = document.createElement('span');
     details.className = 'score-details';
-    details.textContent = [score.author, score.opus, score.instrument, sourceNames[score.source]].filter(Boolean).join(' · ');
+    details.textContent = [score.author, score.opus, score.instrument].filter(Boolean).join(' · ');
     const badge = document.createElement('span');
     badge.className = 'badge';
     badge.textContent = {pdf: 'PDF', mxl: 'MusicXML', png: 'Ảnh'}[score.format] || 'Bản phổ';
@@ -168,7 +200,7 @@ async function load() {
     }
     const query = new URLSearchParams(location.search);
     search.value = (query.get('q') || '').slice(0, 120);
-    if (Object.hasOwn(sourceNames, query.get('source'))) collection.value = query.get('source');
+    if ([...collection.options].some(option => option.value === query.get('source'))) collection.value = query.get('source');
     filter();
   } catch {
     byId('count').textContent = 'Chưa tải được danh mục. Hãy tải lại trang.';

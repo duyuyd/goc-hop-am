@@ -6,8 +6,7 @@ Tra bài hát, đọc hợp âm, đổi tông, lưu ngoại tuyến và tập c�
 
 - [Website](https://gochopam.pages.dev/)
 - [Tải APK Android miễn phí](https://gochopam.pages.dev/ung-dung/)
-- [Bản phát hành](https://github.com/duyuyd/goc-hop-am/releases)
-- [Trạng thái biên dịch thực tế](https://github.com/duyuyd/goc-hop-am/actions)
+- [Kho bản phổ](https://gochopam.pages.dev/ban-pho/)
 
 ## Bản 1.4.0
 
@@ -16,7 +15,7 @@ Tra bài hát, đọc hợp âm, đổi tông, lưu ngoại tuyến và tập c�
 - Bài thiếu bản phổ hoặc nguồn không truy cập được được báo đúng trạng thái. **Không tạo nốt suy đoán từ hợp âm rồi gọi là sheet đúng bài. Chưa có sheet xác minh cho toàn bộ 50.000 bài.**
 - Theo lời tô sáng và cuộn các dòng lời bên dưới YouTube; sửa lỗi bỏ qua dòng đầu, cập nhật khi tua hoặc chuyển tông. Khi nguồn chặn đọc phụ đề, vẫn cần mốc lời có sẵn, tệp phụ đề hoặc mốc đánh dấu; không tự đoán thời gian.
 - Giao diện riêng NPT Duy: xanh mực, cam san hô, đầu trang gọn, nút bản phổ đặt cạnh bài hát.
-- Không gọi API AI trả phí. Thu âm, camera và quay màn hình được giữ nguyên. Bản ghi và mốc lời không tự tải lên mạng.
+- Thu âm, camera và quay màn hình. Bản ghi và mốc lời lưu trên thiết bị.
 
 PDF.js 6.5.438 được phân phối theo Apache-2.0; xem `public/mobile/vendor/PDFJS-LICENSE.txt`. Các bản phổ có thể là giai điệu/hợp âm hoặc một bản chuyển soạn cụ thể; ứng dụng không tự gọi chúng là tổng phổ piano hai tay khi nguồn không ghi như vậy. PDF không tự chuyển tông theo nút đổi tông hợp âm.
 
@@ -36,7 +35,7 @@ Dùng JDK 17, Gradle 8.13, Android SDK 36. AAB production `vn.gochopam.app` chư
 
 ## iOS
 
-Mở `mobile/ios/GocHopAm.xcodeproj` bằng Xcode. Target iOS 16 trở lên. Không cần CocoaPods. GitHub Actions biên dịch bản Simulator và bản thiết bị chưa ký; kết quả thực tế xem tại Actions.
+Mở `mobile/ios/GocHopAm.xcodeproj` bằng Xcode. Target iOS 16 trở lên. Quy trình biên dịch tạo bản Simulator và bản thiết bị chưa ký.
 
 ```sh
 node mobile/scripts/prepare-web.mjs

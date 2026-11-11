@@ -169,14 +169,12 @@ final class MusicViewController: UIViewController, WKScriptMessageHandler, WKNav
             case "videoLayout":
                 videoExtent = CGFloat(max(200, min(420, args["size"] as? Int ?? 200)))
                 videoSize?.isActive = false; videoSize = nil; view.setNeedsLayout(); view.layoutIfNeeded()
-            case "sheetSource":
-                let sources = ["musescore": "https://musescore.com/sheetmusic", "imslp": "https://imslp.org/", "musopen": "https://musopen.org/sheetmusic/"]
-                guard let source = args["source"] as? String, let target = sources[source], let url = URL(string: target) else { reply(id, false, "Nguồn không hợp lệ."); return }
-                UIApplication.shared.open(url)
+            case "scoreLibrary": UIApplication.shared.open(URL(string: apiOrigin + "/ban-pho/")!)
             case "readAudio":
                 guard documentRequest == nil else { reply(id, false, "Đang chọn một tệp khác."); return }
                 documentRequest = id; readingAudio = true
-                let types = (args["kind"] as? String ?? "audio") == "audio" ? ["public.audio"] : ["public.data"]
+                let kind = args["kind"] as? String ?? "audio"
+                let types = kind == "pdf" ? ["com.adobe.pdf"] : (kind == "audio" ? ["public.audio"] : ["public.data"])
                 let audioPicker = UIDocumentPickerViewController(documentTypes: types, in: .import)
                 audioPicker.delegate = self; audioPicker.allowsMultipleSelection = false
                 present(audioPicker, animated: true); return
@@ -248,7 +246,6 @@ final class MusicViewController: UIViewController, WKScriptMessageHandler, WKNav
                 share.popoverPresentationController?.sourceView = web
                 share.popoverPresentationController?.sourceRect = CGRect(x: web.bounds.midX, y: 20, width: 1, height: 1)
                 present(share, animated: true)
-            case "github": UIApplication.shared.open(URL(string: "https://github.com/duyuyd/goc-hop-am")!)
             case "help": UIApplication.shared.open(URL(string: apiOrigin + "/huong-dan")!)
             default: reply(id, false, "Thao tác chưa được hỗ trợ."); return
             }
@@ -266,9 +263,9 @@ final class MusicViewController: UIViewController, WKScriptMessageHandler, WKNav
         do {
             let limit = audio ? 3_000_000 : 250_000
             let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? (limit + 1)
-            guard size <= limit else { reply(id, false, "Chọn tệp văn bản dưới 250 KB."); return }
+            guard size <= limit else { reply(id, false, audio ? "Chọn tệp tối đa 3 MB." : "Chọn tệp văn bản tối đa 250 KB."); return }
             let bytes = try Data(contentsOf: url)
-            if audio { guard bytes.count <= limit else { reply(id, false, "Tệp âm thanh quá lớn."); return }; reply(id, true, ["base64": bytes.base64EncodedString()]); return }
+            if audio { guard bytes.count <= limit else { reply(id, false, "Tệp vượt quá 3 MB."); return }; reply(id, true, ["base64": bytes.base64EncodedString()]); return }
             guard bytes.count <= 250_000, let text = String(data: bytes, encoding: .utf8) else { reply(id, false, "Tệp cần dùng mã UTF-8."); return }
             reply(id, true, text)
         } catch { reply(id, false, "Chưa đọc được tệp đã chọn.") }

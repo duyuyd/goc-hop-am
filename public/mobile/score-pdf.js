@@ -1,5 +1,5 @@
 // Package the rendered A4 pages as PDF image streams without a network dependency.
-export function sheetPdfBytes(pages) {
+export function sheetPdfBytes(pages, {title = '', author = ''} = {}) {
   if (!pages.length) throw new Error('Chưa có trang để xuất PDF.');
   const encoder = new TextEncoder(), chunks = [], offsets = [0];
   let length = 0;
@@ -30,10 +30,17 @@ export function sheetPdfBytes(pages) {
     object(id + 1, '<< /Type /XObject /Subtype /Image /Width ' + page.width + ' /Height ' + page.height + ' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ' + page.bytes.byteLength + ' >>', page.bytes);
     object(id + 2, '<< /Length ' + draw.byteLength + ' >>', draw);
   }
+  function pdfText(value) {
+    const units = String(value).slice(0, 180).split('').map(char => char.charCodeAt(0).toString(16).padStart(4, '0'));
+    return '<FEFF' + units.join('') + '>';
+  }
+  const info = 3 + pages.length * 3;
+  object(info, '<< /Creator (NPT Duy) /Producer (Goc Hop Am)' +
+    (title ? ' /Title ' + pdfText(title) : '') + (author ? ' /Author ' + pdfText(author) : '') + ' >>');
   const xref = length;
   add('xref\n0 ' + offsets.length + '\n0000000000 65535 f \n');
   for (const offset of offsets.slice(1)) add(String(offset).padStart(10, '0') + ' 00000 n \n');
-  add('trailer\n<< /Size ' + offsets.length + ' /Root 1 0 R >>\nstartxref\n' + xref + '\n%%EOF\n');
+  add('trailer\n<< /Size ' + offsets.length + ' /Root 1 0 R /Info ' + info + ' 0 R >>\nstartxref\n' + xref + '\n%%EOF\n');
   const output = new Uint8Array(length);
   let position = 0;
   for (const bytes of chunks) {
@@ -43,7 +50,7 @@ export function sheetPdfBytes(pages) {
   return output;
 }
 
-export async function sheetPdfFromSvg(svgs) {
+export async function sheetPdfFromSvg(svgs, metadata) {
   const pages = [];
   for (const svg of svgs) {
     const url = URL.createObjectURL(new Blob([svg], {type: 'image/svg+xml;charset=utf-8'}));
@@ -66,5 +73,5 @@ export async function sheetPdfFromSvg(svgs) {
       URL.revokeObjectURL(url);
     }
   }
-  return sheetPdfBytes(pages);
+  return sheetPdfBytes(pages, metadata);
 }

@@ -73,9 +73,10 @@ async function readVietnameseScores() {
   return result;
 }
 
-const [html, vietnamese, liederHtml, quartetHtml] = await Promise.all([
+const [html, vietnamese, liederHtml, quartetHtml, orchestraHtml] = await Promise.all([
   readSource(mutopiaCatalogUrl, 1800000), readVietnameseScores(),
   readSource(openScoreSources.lieder.index, 3000000), readSource(openScoreSources.quartets.index, 3000000),
+  readSource(openScoreSources.orchestra.index, 1500000),
 ]);
 const listing = new TextDecoder().decode(html);
 const mutopia = parseMutopiaCatalog(listing);
@@ -86,10 +87,14 @@ const old = await readFile(catalogPath, 'utf8').then(JSON.parse).catch(error => 
 });
 const lieder = parseOpenScoreCatalog(new TextDecoder().decode(liederHtml), 'lieder');
 const quartets = parseOpenScoreCatalog(new TextDecoder().decode(quartetHtml), 'quartets');
-const catalog = {items: [...vietnamese.map(({bytes, ...item}) => item), ...mutopia, ...lieder, ...quartets]};
+const orchestraListing = new TextDecoder().decode(orchestraHtml);
+const orchestra = parseOpenScoreCatalog(orchestraListing, 'orchestra');
+const fullScores = new Set([...orchestraListing.matchAll(/<a\b[^>]*\bhref=["']([^"']+\.mxl)["'][^>]*>\s*\.mxl\s*<\/a>/gi)].map(match => match[1]));
+const catalog = {items: [...vietnamese.map(({bytes, ...item}) => item), ...mutopia, ...lieder, ...quartets, ...orchestra]};
 const ids = new Set(catalog.items.map(item => item.id));
 if (mutopia.length < 1000 || mutopia.length !== new Set(expected.map(match => match[1])).size ||
-    lieder.length < 1200 || quartets.length < 160 || ids.size !== catalog.items.length ||
+    lieder.length < 1200 || quartets.length < 160 || orchestra.length < 80 || orchestra.length !== fullScores.size ||
+    ids.size !== catalog.items.length ||
     old.items.some(item => !ids.has(item.id))) {
   throw new Error('Danh mục nguồn có dấu hiệu thiếu mục. Giữ bản dữ liệu trước để kiểm tra.');
 }
@@ -98,4 +103,4 @@ for (const {asset, bytes} of vietnamese) await writeFile(new URL(asset, output),
 const draft = new URL('catalog.json.tmp', output);
 await writeFile(draft, '{"items":[\n' + catalog.items.map(item => JSON.stringify(item)).join(',\n') + '\n]}\n');
 await rename(draft, catalogPath);
-console.log(`Đã đồng bộ ${catalog.items.length} mục: ${vietnamese.length} tiếng Việt, ${mutopia.length} Mutopia, ${lieder.length} Lieder, ${quartets.length} tứ tấu.`);
+console.log(`Đã đồng bộ ${catalog.items.length} bản phổ gồm ${vietnamese.length} tiếng Việt, ${mutopia.length} cổ điển, ${lieder.length} thanh nhạc, ${quartets.length} tứ tấu và ${orchestra.length} tổng phổ dàn nhạc.`);

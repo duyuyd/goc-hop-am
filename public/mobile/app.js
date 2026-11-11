@@ -156,7 +156,6 @@ window.addEventListener('message',event=>{const frame=$('video-mount').querySele
 const studio=createStudio({call,native,toast,beforeRecord(){stopWebMetro();metroRunning=false;metroLabel()}});
 $('reader-options-close').addEventListener('click',()=>$('reader-options').open=false);
 
-$('github').addEventListener('click',()=>native?call('github'):window.open('https://github.com/duyuyd/goc-hop-am','_blank','noopener'));
 
 $('share-app').addEventListener('click',()=>call('share',{title:'Góc Hợp Âm',text:'Cùng tìm hợp âm và tập hát trên Góc Hợp Âm · NPT Duy',url:'https://gochopam.pages.dev/'}).catch(error=>toast(error.message)));
 

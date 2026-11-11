@@ -70,12 +70,14 @@ test('PDF writer records byte-accurate offsets for pages and their binary stream
  const bytes=sheetPdfBytes([
   {width:1600,height:2000,bytes:new Uint8Array([255,216,255,217])},
   {width:1600,height:900,bytes:new Uint8Array([255,216,255,217])}
- ]);
+ ], {title:'Bản phổ của tôi',author:'Người soạn'});
  const pdf=Buffer.from(bytes).toString('latin1');
  assert.match(pdf,/%PDF-1\.4/);
  assert.match(pdf,/\/Count 2 \/Kids \[3 0 R 6 0 R\]/);
+ assert.match(pdf,/\/Creator \(NPT Duy\) \/Producer \(Goc Hop Am\).*\/Title <FEFF[0-9a-f]+> \/Author <FEFF[0-9a-f]+>/);
+ assert.match(pdf,/\/Info 9 0 R/);
  const index=Number(pdf.match(/startxref\n(\d+)/)[1]);
  assert.equal(pdf.slice(index,index+4),'xref');
- const rows=pdf.slice(index).split('\n').slice(3,11);
+ const rows=pdf.slice(index).split('\n').slice(3,12);
  rows.forEach((row,i)=>assert.equal(pdf.slice(Number(row.slice(0,10)),Number(row.slice(0,10))+7),(i+1)+' 0 obj'));
 });

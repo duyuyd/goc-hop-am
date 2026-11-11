@@ -4,11 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#101c2c">
+  <meta name="author" content="NPT Duy">
   <meta name="description" content="Tìm bản phổ PDF, MusicXML và ảnh bản nhạc có nguồn rõ ràng trên Góc Hợp Âm.">
   <title>Kho bản phổ · Góc Hợp Âm</title>
   <link rel="icon" href="/favicon.svg">
-  <link rel="stylesheet" href="/music-tools.css?v=143">
-  <link rel="stylesheet" href="/ban-pho/library.css?v=2">
+  <link rel="stylesheet" href="/music-tools.css?v=145">
+  <link rel="stylesheet" href="/ban-pho/library.css?v=3">
 </head>
 <body>
   <header class="masthead">
@@ -17,21 +18,26 @@
   </header>
   <main>
     <section class="intro" aria-labelledby="title">
-      <span class="eyebrow">GÓC HỢP ÂM · THƯ VIỆN</span>
+      <span class="eyebrow">GÓC HỢP ÂM · NPT DUY</span>
       <h1 id="title">Kho bản phổ mở</h1>
-      <p>Tìm và đọc bản phổ từ OpenScore, Mutopia Project và Wikimedia Commons ngay trên Góc Hợp Âm.</p>
-      <p><a href="/?mode=sheets">Bản phổ theo bài hát</a></p>
+      <div class="library-actions">
+        <a href="/?mode=sheets">Bản phổ theo bài hát</a>
+        <button id="mo-pdf" type="button">Mở PDF trên máy</button>
+        <input id="local-file" type="file" accept="application/pdf,.pdf" hidden>
+      </div>
+      <p id="local-status" role="status" aria-live="polite"></p>
       <div class="controls">
         <label>Tìm bản phổ
           <input id="search" type="search" placeholder="Tên bản nhạc, tác giả, nhạc cụ…" maxlength="120" autocomplete="off">
         </label>
         <label>Danh mục
           <select id="collection">
-            <option value="">Tất cả nguồn</option>
+            <option value="">Tất cả bản phổ</option>
             <option value="commons">Bản tiếng Việt</option>
-            <option value="mutopia">Mutopia Project</option>
-            <option value="lieder">OpenScore Lieder</option>
-            <option value="quartets">OpenScore Tứ tấu</option>
+            <option value="mutopia">Bản phổ cổ điển</option>
+            <option value="lieder">Thanh nhạc</option>
+            <option value="quartets">Tứ tấu dây</option>
+            <option value="orchestra">Tổng phổ dàn nhạc</option>
           </select>
         </label>
       </div>
@@ -49,7 +55,7 @@
       </nav>
     </section>
   </main>
-  <dialog id="viewer" aria-labelledby="score-title">
+  <dialog id="viewer" class="score-viewer" aria-labelledby="score-title">
     <div class="viewer-head">
       <div>
         <h2 id="score-title"></h2>
@@ -58,17 +64,25 @@
       <form method="dialog"><button aria-label="Đóng bản phổ">Đóng</button></form>
     </div>
     <div class="viewer-links">
-      <a id="score-source" target="_blank" rel="noopener noreferrer">Trang nguồn</a>
+      <a id="score-source" target="_blank" rel="noopener noreferrer">Bản gốc và ghi công</a>
       <a id="score-license" target="_blank" rel="noopener noreferrer" hidden>Giấy phép</a>
       <a id="score-image-file" target="_blank" rel="noopener" hidden>Mở ảnh gốc</a>
       <a id="score-archive" target="_blank" rel="noopener noreferrer" hidden>Tải ZIP bản phổ</a>
       <a id="score-mxl-file" download hidden>Tải MusicXML gốc</a>
     </div>
     <div id="score-pdf"></div>
+    <label id="xml-edition-field" hidden>Bản MusicXML<select id="xml-edition"></select></label>
     <p id="xml-status" role="status" aria-live="polite" hidden></p>
     <div id="score-xml" hidden></div>
     <img id="score-image" alt="" hidden>
   </dialog>
-  <script type="module" src="/ban-pho/library.js?v=2"></script>
+  <dialog id="local-viewer" class="score-viewer" aria-labelledby="local-title">
+    <div class="viewer-head">
+      <h2 id="local-title">PDF trên thiết bị</h2>
+      <form method="dialog"><button aria-label="Đóng PDF trên thiết bị">Đóng</button></form>
+    </div>
+    <div id="local-score-pdf"></div>
+  </dialog>
+  <script type="module" src="/ban-pho/library.js?v=3"></script>
 </body>
 </html>

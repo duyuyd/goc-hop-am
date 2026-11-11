@@ -75,3 +75,37 @@ test('an older pending PDF never replaces the new song or re-enables the old dow
     globalThis.GocPdf = originalEngine;
   }
 });
+
+test('opening a local PDF only uses local bytes and closes the document', async () => {
+  const originalDocument = globalThis.document;
+  const originalEngine = globalThis.GocPdf;
+  const originalFetch = globalThis.fetch;
+  const documentPdf = pdf(3);
+  let requests = 0, destroyed = false;
+  globalThis.document = {createElement: () => new Element()};
+  globalThis.fetch = async () => { requests++; throw new Error('Unexpected network request'); };
+  globalThis.GocPdf = {getDocument({data}) {
+    assert.equal(new TextDecoder().decode(data), '%PDF-1.4\n');
+    return {promise: Promise.resolve(documentPdf), async destroy() { destroyed = true; }};
+  }};
+  try {
+    const host = {clientWidth: 800, prepend(panel) { this.panel = panel; }};
+    const reader = createSongSheet({host});
+    const state = name => host.panel.querySelector(`[data-ss="${name}"]`);
+    await assert.rejects(() => reader.openLocal(new Uint8Array([1,2,3]), 'file.pdf'), /định dạng PDF/);
+    await reader.openLocal(new TextEncoder().encode('%PDF-1.4\n'), 'Bản phổ.pdf');
+    assert.equal(reader.isOpen, true);
+    assert.equal(state('page').textContent, 'Trang 1 / 3');
+    assert.equal(state('source').textContent, 'Bản phổ.pdf');
+    assert.equal(state('reload').hidden, true);
+    assert.equal(state('pdf').hidden, true);
+    assert.equal(requests, 0);
+    state('close').onclick();
+    assert.equal(reader.isOpen, false);
+    assert.equal(destroyed, true);
+  } finally {
+    globalThis.document = originalDocument;
+    globalThis.GocPdf = originalEngine;
+    globalThis.fetch = originalFetch;
+  }
+});

@@ -21,6 +21,7 @@ main { padding: .8rem 0 3rem; }
 h1, h2, p { margin: 0; }
 h1 { font: clamp(2.05rem, 6vw, 3.2rem)/1.2 Georgia, serif; margin: .32rem 0 .55rem; }
 .intro p, .list-head p, #score-credit { color: var(--muted); }
+.library-actions { display: flex; align-items: center; flex-wrap: wrap; gap: .6rem 1rem; }
 .controls { display: grid; grid-template-columns: minmax(0, 1fr) minmax(12rem, 17rem); gap: .8rem; margin-top: 1.25rem; }
 label { display: grid; gap: .35rem; font-weight: 650; }
 input, select, button {
@@ -41,14 +42,16 @@ button:not(:disabled):hover, button:focus-visible, input:focus-visible, select:f
 .score-details { grid-column: 1; color: var(--muted); font-size: .85rem; }
 .badge { grid-column: 2; grid-row: 1 / span 2; align-self: center; color: var(--orange); font-size: .77rem; border: 1px solid var(--line); padding: .15rem .43rem; border-radius: .4rem; }
 #pagination { display: flex; align-items: center; justify-content: center; gap: .65rem; padding-top: .65rem; }
-#viewer { width: min(100% - 1rem, 61rem); max-height: 94dvh; overflow: auto; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: .85rem; padding: 1rem; }
-#viewer::backdrop { background: #050a11c4; }
+.score-viewer { width: min(100% - 1rem, 61rem); max-height: 94dvh; overflow: auto; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: .85rem; padding: 1rem; }
+.score-viewer::backdrop { background: #050a11c4; }
 .viewer-head { display: flex; justify-content: space-between; gap: .75rem; align-items: start; }
 .viewer-head h2 { font-size: clamp(1.2rem, 5vw, 1.8rem); }
 .viewer-links { display: flex; flex-wrap: wrap; gap: .5rem 1rem; margin: .65rem 0; }
 #score-image { max-width: 100%; height: auto; display: block; margin-inline: auto; background: white; }
 #score-pdf .sheet-song-head, #score-pdf .sheet-origin, #score-pdf:not(.has-parts) .ss-options { display: none; }
 #score-pdf .song-sheet { padding: .45rem 0 0; }
+#local-score-pdf .sheet-song-head, #local-score-pdf .sheet-origin { display: none; }
+#xml-edition-field { max-width: 16rem; }
 #score-xml { background: white; color: #161616; overflow: auto; border-radius: .55rem; }
 #score-xml > div { min-width: 32rem; }
 #xml-status { margin: .7rem 0; color: var(--muted); }

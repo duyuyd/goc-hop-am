@@ -8,6 +8,7 @@ const publicRoot = new URL('../public/', import.meta.url);
 test('the offline worker uses only public static files and falls back on a disconnected reader navigation', async () => {
   const source = await readFile(new URL('service-worker.js',publicRoot),'utf8');
   const html = await readFile(new URL('live.html',publicRoot),'utf8');
+  const mobile = await readFile(new URL('mobile/index.html',publicRoot),'utf8');
   const origin='https://goc.example';
   const events=new Map();
   const cached=new Map();
@@ -30,8 +31,9 @@ test('the offline worker uses only public static files and falls back on a disco
   let installed;
   events.get('install')({waitUntil:promise=>{installed=promise}});
   await installed;
-  assert.ok(cached.has('/live.js?v=144'));
-  assert.ok(cached.has('/mobile/bundle.js?v=144'));
+  assert.ok(cached.has(html.match(/src="(\/live\.js\?v=\d+)"/)[1]));
+  assert.ok(cached.has('/mobile/'+mobile.match(/src="(bundle\.js\?v=\d+)"/)[1]));
+  assert.ok(cached.has('/mobile/vendor/pdf-engine.js'));
   const fetchEvent=(path,mode='navigate')=>{
     let response;
     events.get('fetch')({request:{url:origin+path,method:'GET',mode},respondWith:value=>{response=value}});

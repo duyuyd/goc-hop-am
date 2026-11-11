@@ -1,5 +1,7 @@
 # Góc Hợp Âm
 
+**Người phát triển: NPT Duy.**
+
 A Vietnamese chord library with an independent visual shell, member accounts and a protected administrator area.
 
 - `/` — discovery, personal favorites and a native chord reader with transposition, font size and auto-scroll controls.

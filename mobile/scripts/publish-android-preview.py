@@ -10,6 +10,6 @@ apk = root / 'mobile/build/Goc_Hop_Am_Android_Cai_Thu.apk'
 target = root / 'public/downloads/Goc_Hop_Am_Android_1.4.0.apk'
 target.parent.mkdir(parents=True, exist_ok=True)
 shutil.copyfile(apk, target)
-release = {'version':'1.4.0','versionCode':6,'package':'vn.gochopam.app.preview','channel':'preview','download':'/downloads/'+target.name,'sizeBytes':target.stat().st_size,'sha256':hashlib.sha256(target.read_bytes()).hexdigest(),'author':'NPT Duy','sourceRepository':'https://github.com/duyuyd/goc-hop-am'}
+release = {'version':'1.4.0','versionCode':6,'package':'vn.gochopam.app.preview','channel':'preview','download':'/downloads/'+target.name,'sizeBytes':target.stat().st_size,'sha256':hashlib.sha256(target.read_bytes()).hexdigest(),'author':'NPT Duy'}
 (target.parent/'android-release.json').write_text(json.dumps(release,ensure_ascii=False,indent=2)+'\n')
 print(json.dumps(release,ensure_ascii=False))

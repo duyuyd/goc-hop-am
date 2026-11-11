@@ -253,7 +253,7 @@ async function transcribeMusicAudio(buffer,{bpm=80,start=0,onProgress=()=>{}}={}
  const notes=scoreFromPitches(frames,hop/rate,bpm);if(!notes.some(n=>n.midi!==null))throw new Error('Chưa nhận được giai điệu rõ. Dùng bản hát hoặc nhạc cụ một bè, ít tiếng nền.');onProgress(100);return {notes,seconds:length,limited:buffer.duration-offset>60||notes.length>=128};
 }
 function readMusicAudio({native=false,call,kind='audio'}={}){
- const inputs={audio:{accept:'audio/*',limit:3000000,name:'Giai điệu nhận diện'},midi:{accept:'.mid,.midi,audio/midi',limit:3000000,name:'Bản nhạc MIDI'},musicxml:{accept:'.musicxml,.xml,application/xml,text/xml',limit:1500000,name:'Bản nhạc MusicXML'}};
+ const inputs={audio:{accept:'audio/*',limit:3000000,name:'Giai điệu nhận diện'},midi:{accept:'.mid,.midi,audio/midi',limit:3000000,name:'Bản nhạc MIDI'},musicxml:{accept:'.musicxml,.xml,application/xml,text/xml',limit:1500000,name:'Bản nhạc MusicXML'},pdf:{accept:'.pdf,application/pdf',limit:native?3000000:8000000,name:'Bản phổ trên thiết bị'}};
  const source=inputs[kind];
  if(native)return call('readAudio',{kind}).then(data=>{if(!data?.base64)return null;if(data.base64.length>Math.ceil(source.limit/3)*4)throw new Error('Tệp vượt giới hạn kích thước của Studio.');const value=atob(data.base64),bytes=new Uint8Array(value.length);for(let i=0;i<value.length;i++)bytes[i]=value.charCodeAt(i);return {bytes:bytes.buffer,name:source.name}});
  return new Promise((resolve,reject)=>{const input=document.createElement('input');input.type='file';input.accept=source.accept;input.hidden=true;document.body.append(input);input.oncancel=()=>{input.remove();resolve(null)};input.onchange=async()=>{try{const file=input.files?.[0];if(!file){resolve(null);return}if(file.size>source.limit)throw new Error('Chọn tệp tối đa '+(source.limit/1000000).toLocaleString('vi-VN')+' MB.');resolve({bytes:await file.arrayBuffer(),name:file.name.replace(/\.[^.]*$/,'')})}catch(error){reject(error)}finally{input.remove()}};input.click()});
@@ -550,7 +550,7 @@ function chordAccompaniment(song, instrument, {transpose, chord, bpm = 80} = {})
 }
 
 // Package the rendered A4 pages as PDF image streams without a network dependency.
-function sheetPdfBytes(pages) {
+function sheetPdfBytes(pages, {title = '', author = ''} = {}) {
   if (!pages.length) throw new Error('Chưa có trang để xuất PDF.');
   const encoder = new TextEncoder(), chunks = [], offsets = [0];
   let length = 0;
@@ -581,10 +581,17 @@ function sheetPdfBytes(pages) {
     object(id + 1, '<< /Type /XObject /Subtype /Image /Width ' + page.width + ' /Height ' + page.height + ' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ' + page.bytes.byteLength + ' >>', page.bytes);
     object(id + 2, '<< /Length ' + draw.byteLength + ' >>', draw);
   }
+  function pdfText(value) {
+    const units = String(value).slice(0, 180).split('').map(char => char.charCodeAt(0).toString(16).padStart(4, '0'));
+    return '<FEFF' + units.join('') + '>';
+  }
+  const info = 3 + pages.length * 3;
+  object(info, '<< /Creator (NPT Duy) /Producer (Goc Hop Am)' +
+    (title ? ' /Title ' + pdfText(title) : '') + (author ? ' /Author ' + pdfText(author) : '') + ' >>');
   const xref = length;
   add('xref\n0 ' + offsets.length + '\n0000000000 65535 f \n');
   for (const offset of offsets.slice(1)) add(String(offset).padStart(10, '0') + ' 00000 n \n');
-  add('trailer\n<< /Size ' + offsets.length + ' /Root 1 0 R >>\nstartxref\n' + xref + '\n%%EOF\n');
+  add('trailer\n<< /Size ' + offsets.length + ' /Root 1 0 R /Info ' + info + ' 0 R >>\nstartxref\n' + xref + '\n%%EOF\n');
   const output = new Uint8Array(length);
   let position = 0;
   for (const bytes of chunks) {
@@ -594,7 +601,7 @@ function sheetPdfBytes(pages) {
   return output;
 }
 
-async function sheetPdfFromSvg(svgs) {
+async function sheetPdfFromSvg(svgs, metadata) {
   const pages = [];
   for (const svg of svgs) {
     const url = URL.createObjectURL(new Blob([svg], {type: 'image/svg+xml;charset=utf-8'}));
@@ -617,7 +624,7 @@ async function sheetPdfFromSvg(svgs) {
       URL.revokeObjectURL(url);
     }
   }
-  return sheetPdfBytes(pages);
+  return sheetPdfBytes(pages, metadata);
 }
 
 // Góc Hợp Âm music workspace. Project developer: NPT Duy.
@@ -693,7 +700,7 @@ function scoreMusicXml(value) {
  const creator = score.author ? '<creator type="composer">'+musicXmlText(score.author)+'</creator>' : '';
  const provenance = score.origin ? '<miscellaneous><miscellaneous-field name="source-status">'+musicXmlText(musicOrigins[score.origin])+'</miscellaneous-field><miscellaneous-field name="goc-sheet-origin">'+score.origin+'</miscellaneous-field></miscellaneous>' : '';
  const measures = bars.map((bar,i) => '<measure number="'+(i+1)+'"'+(bar.beats===4 ? '' : ' implicit="yes"')+'>'+(i===0 ? setup : '')+bar.events.join('')+'</measure>').join('\n');
- return '<?xml version="1.0" encoding="UTF-8"?>\n<score-partwise version="4.0"><work><work-title>'+musicXmlText(score.title)+'</work-title></work><identification>'+creator+provenance+'</identification><part-list><score-part id="P1"><part-name>'+(score.origin?.endsWith('-draft') && score.origin !== 'audio-draft' ? 'Bè đệm' : 'Giai điệu')+'</part-name></score-part></part-list><part id="P1">\n'+measures+'\n</part></score-partwise>\n';
+ return '<?xml version="1.0" encoding="UTF-8"?>\n<score-partwise version="4.0"><work><work-title>'+musicXmlText(score.title)+'</work-title></work><identification>'+creator+'<encoding><software>Góc Hợp Âm · NPT Duy</software></encoding>'+provenance+'</identification><part-list><score-part id="P1"><part-name>'+(score.origin?.endsWith('-draft') && score.origin !== 'audio-draft' ? 'Bè đệm' : 'Giai điệu')+'</part-name></score-part></part-list><part id="P1">\n'+measures+'\n</part></score-partwise>\n';
 }
 
 const musicBarsPerRow = score => score.notes.some(note => note.beats < .5 || note.beats === .75) ? 2 : 4;
@@ -770,21 +777,22 @@ function scorePages(value) {
  return pages.map((notes,index) => musicSvg({...score,notes},{firstBar:1+barsPerPage*index,barsPerRow,page:(index+1)+' / '+pages.length,tieIn:pages[index-1]?.at(-1)?.tie}));
 }
 const musicStudioActions = [
- ['music-find-pdf','01','Tìm bản phổ PDF','Tra kho nguồn đang có'],
- ['music-import-midi','02','MIDI → bản phổ','Đọc nốt và nhịp từ tệp'],
- ['music-import-xml','03','MusicXML → bản phổ','Mở và chỉnh nốt có sẵn'],
- ['music-transcribe','04','Audio → nháp giai điệu','Nhận nốt ngay trên máy'],
- ['music-make-piano','05','Tạo bè đệm piano','Rải nốt từ hợp âm bài đang mở'],
- ['music-make-organ','06','Tạo bè đệm organ','Âm trầm và nốt đỡ từ hợp âm']
+ ['music-find-pdf','Tìm bản phổ PDF','Tìm theo bài đang mở'],
+ ['music-local-pdf','Mở PDF trên máy','Đọc bản phổ trong tệp của bạn'],
+ ['music-import-midi','MIDI → bản phổ','Đọc nốt và nhịp từ tệp'],
+ ['music-import-xml','MusicXML → bản phổ','Mở và chỉnh nốt có sẵn'],
+ ['music-transcribe','Audio → nháp giai điệu','Nhận nốt ngay trên máy'],
+ ['music-make-piano','Tạo bè đệm piano','Rải nốt từ hợp âm bài đang mở'],
+ ['music-make-organ','Tạo bè đệm organ','Âm trầm và nốt đỡ từ hợp âm']
 ];
 function musicStudioPanel() {
  return '<div class="music-studio-banner"><span class="music-kicker">STUDIO GÓC HỢP ÂM</span><h3>Từ nguồn nhạc đến bản phổ</h3><p id="music-source-song">Chọn một nguồn để bắt đầu.</p></div>'+
-  '<div class="music-studio-grid" aria-label="Công cụ tạo và tìm bản phổ">'+musicStudioActions.map(([id,number,title,description])=>
-   '<button type="button" id="'+id+'"><span aria-hidden="true">'+number+'</span><strong>'+title+'</strong><small>'+description+'</small></button>').join('')+'</div>'+
+  '<div class="music-studio-grid" aria-label="Công cụ tạo và tìm bản phổ">'+musicStudioActions.map(([id,title,description])=>
+   '<button type="button" id="'+id+'"><strong>'+title+'</strong><small>'+description+'</small></button>').join('')+'</div>'+
   '<p class="music-muted">Nhập một bè C3–C6, nhịp 4/4. Audio hát hoặc đàn riêng dưới 3 MB, tối đa 60 giây theo BPM đã chọn. Bè đệm dùng một ô nhịp cho mỗi hợp âm.</p>'+
   '<div class="music-fields music-studio-controls"><label>Audio bắt đầu từ giây<input id="music-audio-start" type="number" min="0" max="3600" value="0"></label>'+
   '<label>Bản phổ trên máy<select id="music-saved-sheets"></select></label><button id="music-open-saved">Mở bản đã lưu</button></div>'+
-  '<p id="music-job-status" role="status" aria-live="polite"></p><h3>Chỉnh, nghe và xuất bản phổ</h3>';
+  '<p id="music-job-status" role="status" aria-live="polite"></p><div id="music-local-view"></div><h3>Chỉnh, nghe và xuất bản phổ</h3>';
 }
 function createMusicTools({native=false,call=async()=>true,toast=()=>{},getSong=()=>null,getShift=()=>0,onFindPdf=()=>{}}={}){
  let data={score:{format:'goc-score-1',title:'Giai điệu của tôi',author:'',bpm:80,notes:[]},notes:'',sessions:[],savedSheets:[],activeSheet:''};
@@ -795,8 +803,10 @@ function createMusicTools({native=false,call=async()=>true,toast=()=>{},getSong=
   if(data.savedSheets.some(entry=>entry.id===v.activeSheet))data.activeSheet=v.activeSheet;
  }}catch{}
  const dialog=document.createElement('dialog');dialog.id='music-tools';dialog.className='music-tools';dialog.setAttribute('aria-labelledby','music-title');
- dialog.innerHTML=`<div class="music-head"><div><span class="music-kicker">GÓC HỢP ÂM · NPT DUY</span><h2 id="music-title">Studio bản phổ</h2></div><button data-music-close aria-label="Đóng công cụ">×</button></div><nav class="music-tabs" aria-label="Công cụ âm nhạc"><button data-music-tab="chords" aria-pressed="true">Hợp âm</button><button data-music-tab="score" aria-pressed="false">Sheet nhạc</button><button data-music-tab="practice" aria-pressed="false">Buổi tập</button></nav><section data-music-panel="chords"><p class="music-muted">12 giọng · 12 loại hợp âm · phát bằng âm tổng hợp trên thiết bị.</p><div class="music-fields"><label>Âm gốc<select id="music-root">${musicNames.map(n=>`<option>${n}</option>`).join('')}</select></label><label>Loại hợp âm<select id="music-quality">${Object.keys(musicQualities).map(q=>`<option value="${q}">${q||'Trưởng'}${q==='m'?' · thứ':''}</option>`).join('')}</select></label></div><div class="music-chord"><strong id="music-chord-name">C</strong><p id="music-tones"></p><div id="music-piano" aria-label="Các nốt của hợp âm"></div><button id="music-play-chord">▶ Nghe hợp âm</button></div><h3>Gam & vòng hòa âm</h3><p id="music-scale"></p><p id="music-progression"></p><button id="music-play-progression">▶ Nghe vòng I – vi – IV – V</button><p class="music-muted">Ký hiệu phím thăng (#); các nốt đồng âm có thể được viết khác trong bản nhạc.</p></section><section data-music-panel="score" hidden>${musicStudioPanel()}<div class="music-fields"><label>Tên bản soạn<input id="music-score-title" maxlength="100"></label><label>Người soạn<input id="music-score-author" maxlength="100" placeholder="Tên của bạn"></label></div><div class="music-fields"><label>Nốt<select id="music-note">${Array.from({length:37},(_,i)=>`<option value="${48+i}">${musicNames[i%12]}${3+Math.floor(i/12)}</option>`).join('')}<option value="rest">Dấu lặng</option></select></label><label>Trường độ<select id="music-duration"><option value="1">Nốt đen · 1 phách</option><option value="0.25">Móc kép · ¼ phách</option><option value="0.5">Móc đơn · ½ phách</option><option value="0.75">Móc đơn chấm · ¾ phách</option><option value="1.5">Nốt đen chấm · 1½ phách</option><option value="2">Nốt trắng · 2 phách</option><option value="3">Nốt trắng chấm · 3 phách</option><option value="4">Nốt tròn · 4 phách</option></select></label><label>BPM<input id="music-score-bpm" type="number" min="40" max="240" value="80"></label></div><div class="music-keyboard-wrap"><div id="music-keyboard" class="music-keyboard" aria-label="Đàn piano hai quãng tám"></div></div><p id="music-current-note" class="music-muted" aria-live="polite">Chạm phím để chơi · Khi phát sheet, phím sáng theo từng nốt.</p><div class="music-actions"><button id="music-add-note">＋ Thêm nốt</button><button id="music-undo">↶ Bỏ nốt cuối</button><button id="music-play-score">▶ Nghe sheet</button><button id="music-stop">■ Dừng</button></div><div class="music-fields"><label>Nốt cần chỉnh<select id="music-edit-index" aria-label="Chọn nốt cần chỉnh"></select></label><button id="music-edit-note">Sửa bằng nốt &amp; trường độ đã chọn</button></div><p id="music-score-info" role="status"></p><div id="music-score-preview" class="music-score-preview"></div><div class="music-actions"><button id="music-print-score">In / lưu PDF</button>${native?'':'<button id="music-download-pdf">Tải PDF</button>'}<button id="music-save-score">Lưu bản này</button><button id="music-blank">Giấy kẻ nhạc</button><button id="music-export">↓ Sao lưu sheet JSON</button>${native?'<button id="music-export-xml">Xuất MusicXML</button>':'<a class="music-download" id="music-export-xml" href="#" download="Goc_Hop_Am_Sheet.musicxml">Xuất MusicXML</a>'}<button id="music-import">↑ Mở sheet JSON</button><button id="music-print-lyrics">In lời & hợp âm đang mở</button></div><h3>Tìm sheet từ các thư viện lớn</h3><p class="music-muted">Mở thư viện bên ngoài để tìm bản nhạc. Khả năng xem hoặc tải tùy từng bản; bản nhạc chưa được nhập vào Góc Hợp Âm.</p><div class="music-actions"><button data-sheet-source="musescore">MuseScore ↗</button><button data-sheet-source="imslp">IMSLP ↗</button><button data-sheet-source="musopen">Musopen ↗</button></div><p class="music-muted">Bản nhập và bản nháp ở trên thiết bị này. Xuất PDF, MusicXML hoặc JSON để giữ bản riêng.</p></section><section data-music-panel="practice" hidden><h3>Nhật ký luyện tập</h3><label>Mục tiêu, vòng hợp âm, ghi chú<textarea id="music-practice-notes" rows="6" maxlength="15000" placeholder="Hôm nay tập chuyển Am – F – C – G…"></textarea></label><div class="music-fields"><label>Số phút đã tập<input id="music-minutes" type="number" min="1" max="600" value="15"></label><button id="music-log">Lưu buổi tập</button></div><div id="music-session-list"></div><p class="music-muted">Bản soạn và ghi chú tự lưu trên thiết bị này. Xuất JSON để giữ bản soạn khi đổi máy. Không tự đăng lên mạng.</p></section><p id="music-message" role="status" aria-live="polite"></p><p class="music-byline">Dự án do NPT Duy phát triển.</p>`;
+ dialog.innerHTML=`<div class="music-head"><div><span class="music-kicker">GÓC HỢP ÂM · NPT DUY</span><h2 id="music-title">Studio bản phổ</h2></div><button data-music-close aria-label="Đóng công cụ">×</button></div><nav class="music-tabs" aria-label="Công cụ âm nhạc"><button data-music-tab="chords" aria-pressed="true">Hợp âm</button><button data-music-tab="score" aria-pressed="false">Sheet nhạc</button><button data-music-tab="practice" aria-pressed="false">Buổi tập</button></nav><section data-music-panel="chords"><p class="music-muted">12 giọng · 12 loại hợp âm · phát bằng âm tổng hợp trên thiết bị.</p><div class="music-fields"><label>Âm gốc<select id="music-root">${musicNames.map(n=>`<option>${n}</option>`).join('')}</select></label><label>Loại hợp âm<select id="music-quality">${Object.keys(musicQualities).map(q=>`<option value="${q}">${q||'Trưởng'}${q==='m'?' · thứ':''}</option>`).join('')}</select></label></div><div class="music-chord"><strong id="music-chord-name">C</strong><p id="music-tones"></p><div id="music-piano" aria-label="Các nốt của hợp âm"></div><button id="music-play-chord">▶ Nghe hợp âm</button></div><h3>Gam & vòng hòa âm</h3><p id="music-scale"></p><p id="music-progression"></p><button id="music-play-progression">▶ Nghe vòng I – vi – IV – V</button><p class="music-muted">Ký hiệu phím thăng (#); các nốt đồng âm có thể được viết khác trong bản nhạc.</p></section><section data-music-panel="score" hidden>${musicStudioPanel()}<div class="music-fields"><label>Tên bản soạn<input id="music-score-title" maxlength="100"></label><label>Người soạn<input id="music-score-author" maxlength="100" placeholder="Tên của bạn"></label></div><div class="music-fields"><label>Nốt<select id="music-note">${Array.from({length:37},(_,i)=>`<option value="${48+i}">${musicNames[i%12]}${3+Math.floor(i/12)}</option>`).join('')}<option value="rest">Dấu lặng</option></select></label><label>Trường độ<select id="music-duration"><option value="1">Nốt đen · 1 phách</option><option value="0.25">Móc kép · ¼ phách</option><option value="0.5">Móc đơn · ½ phách</option><option value="0.75">Móc đơn chấm · ¾ phách</option><option value="1.5">Nốt đen chấm · 1½ phách</option><option value="2">Nốt trắng · 2 phách</option><option value="3">Nốt trắng chấm · 3 phách</option><option value="4">Nốt tròn · 4 phách</option></select></label><label>BPM<input id="music-score-bpm" type="number" min="40" max="240" value="80"></label></div><div class="music-keyboard-wrap"><div id="music-keyboard" class="music-keyboard" aria-label="Đàn piano hai quãng tám"></div></div><p id="music-current-note" class="music-muted" aria-live="polite">Chạm phím để chơi · Khi phát sheet, phím sáng theo từng nốt.</p><div class="music-actions"><button id="music-add-note">＋ Thêm nốt</button><button id="music-undo">↶ Bỏ nốt cuối</button><button id="music-play-score">▶ Nghe sheet</button><button id="music-stop">■ Dừng</button></div><div class="music-fields"><label>Nốt cần chỉnh<select id="music-edit-index" aria-label="Chọn nốt cần chỉnh"></select></label><button id="music-edit-note">Sửa bằng nốt &amp; trường độ đã chọn</button></div><p id="music-score-info" role="status"></p><div id="music-score-preview" class="music-score-preview"></div><div class="music-actions"><button id="music-print-score">In / lưu PDF</button>${native?'':'<button id="music-download-pdf">Tải PDF</button>'}<button id="music-save-score">Lưu bản này</button><button id="music-blank">Giấy kẻ nhạc</button><button id="music-export">↓ Sao lưu sheet JSON</button>${native?'<button id="music-export-xml">Xuất MusicXML</button>':'<a class="music-download" id="music-export-xml" href="#" download="Goc_Hop_Am_Sheet.musicxml">Xuất MusicXML</a>'}<button id="music-import">↑ Mở sheet JSON</button><button id="music-print-lyrics">In lời & hợp âm đang mở</button></div><div class="music-actions"><button id="music-library">Mở kho bản phổ ↗</button></div><p class="music-muted">Bản nhập và bản nháp ở trên thiết bị này. Xuất PDF, MusicXML hoặc JSON để giữ bản riêng.</p></section><section data-music-panel="practice" hidden><h3>Nhật ký luyện tập</h3><label>Mục tiêu, vòng hợp âm, ghi chú<textarea id="music-practice-notes" rows="6" maxlength="15000" placeholder="Hôm nay tập chuyển Am – F – C – G…"></textarea></label><div class="music-fields"><label>Số phút đã tập<input id="music-minutes" type="number" min="1" max="600" value="15"></label><button id="music-log">Lưu buổi tập</button></div><div id="music-session-list"></div><p class="music-muted">Bản soạn và ghi chú tự lưu trên thiết bị này. Xuất JSON để giữ bản soạn khi đổi máy. Không tự đăng lên mạng.</p></section><p id="music-message" role="status" aria-live="polite"></p><p class="music-byline">Dự án do NPT Duy phát triển.</p>`;
  document.body.append(dialog);const el=id=>dialog.querySelector('#'+id);let audio,timers=[],picking=false;
+ const localSheet=createSongSheet({host:el('music-local-view')});
+ dialog.addEventListener('close',()=>localSheet.setSong());
  function message(text){
   const inScore=dialog.querySelector('[data-music-tab="score"]').getAttribute('aria-pressed')==='true';
   el('music-message').textContent=inScore?'':text;
@@ -839,11 +849,11 @@ function createMusicTools({native=false,call=async()=>true,toast=()=>{},getSong=
  async function loadDraft(task){
   if(picking)return;
   picking=true;
-  for(const id of ['music-transcribe','music-import-midi','music-import-xml','music-import'])el(id).disabled=true;
+  for(const id of ['music-transcribe','music-import-midi','music-import-xml','music-import','music-local-pdf'])el(id).disabled=true;
   try{await task()}catch(error){message(error.message)}
   finally{
    picking=false;
-   for(const id of ['music-transcribe','music-import-midi','music-import-xml','music-import'])el(id).disabled=false;
+   for(const id of ['music-transcribe','music-import-midi','music-import-xml','music-import','music-local-pdf'])el(id).disabled=false;
   }
  }
  function stop(){for(const timer of timers)clearTimeout(timer);timers=[];if(audio){audio.close().catch(()=>{});audio=null}dialog.querySelectorAll('.music-key.active').forEach(k=>k.classList.remove('active'))}
@@ -851,8 +861,7 @@ function createMusicTools({native=false,call=async()=>true,toast=()=>{},getSong=
  function sound(ctx,midi,start,length=.7,timbre='triangle'){if(midi===null)return;const osc=ctx.createOscillator(),gain=ctx.createGain();osc.type=timbre;osc.frequency.value=440*2**((midi-69)/12);gain.gain.setValueAtTime(0,start);gain.gain.linearRampToValueAtTime(.12,start+.02);gain.gain.exponentialRampToValueAtTime(.001,start+Math.max(.05,length));osc.connect(gain).connect(ctx.destination);osc.start(start);osc.stop(start+length+.03)}
  function lightNote(midi){for(const key of dialog.querySelectorAll('.music-key'))key.classList.toggle('active',Number(key.dataset.midi)===midi);el('music-current-note').textContent=midi===null?'Dấu lặng':musicNames[midi%12]+(Math.floor(midi/12)-1)}
  let white=0;for(let midi=60;midi<=84;midi++){const pitch=midi%12,black=[1,3,6,8,10].includes(pitch),key=document.createElement('button');key.className='music-key '+(black?'is-black':'is-white');key.dataset.midi=midi;key.style.left=((black?white-.32:white)/15*100)+'%';key.style.width=((black?.64:1)/15*100)+'%';key.textContent=musicNames[pitch];key.setAttribute('aria-label',musicNames[pitch]+(Math.floor(midi/12)-1));if(!black)white++;key.onpointerdown=async event=>{event.preventDefault();try{if(!audio)await context();await audio.resume();sound(audio,midi,audio.currentTime,.65);lightNote(midi);el('music-note').value=String(midi)}catch{message('Chưa phát được tiếng đàn.')}};el('music-keyboard').append(key)}
- const sheetSources={musescore:'https://musescore.com/sheetmusic',imslp:'https://imslp.org/',musopen:'https://musopen.org/sheetmusic/'};
- for(const button of dialog.querySelectorAll('[data-sheet-source]'))button.onclick=()=>{const url=sheetSources[button.dataset.sheetSource];if(native)call('sheetSource',{source:button.dataset.sheetSource}).catch(error=>message(error.message));else window.open(url,'_blank','noopener')};
+ el('music-library').onclick=()=>{if(native)call('scoreLibrary').catch(error=>message(error.message));else window.open('/ban-pho/','_blank','noopener')};
  function finish(ctx,seconds){timers.push(setTimeout(()=>{if(audio===ctx)stop()},(seconds+.3)*1000))}
  function chord(){const root=el('music-root').value,q=el('music-quality').value,notes=musicChord(root,q),classes=new Set(notes.map(n=>n%12));el('music-chord-name').textContent=root+q;el('music-tones').textContent=notes.map(n=>musicNames[n%12]).join(' · ');el('music-piano').innerHTML=musicNames.map((n,i)=>`<span class="${n.includes('#')?'black':'white'} ${classes.has(i)?'on':''}">${n}</span>`).join('');const r=musicNames.indexOf(root);el('music-scale').textContent='Gam trưởng: '+[0,2,4,5,7,9,11].map(n=>musicNames[(r+n)%12]).join(' – ');el('music-progression').textContent=[root,musicNames[(r+9)%12]+'m',musicNames[(r+5)%12],musicNames[(r+7)%12]].join(' → ')}
  function score(){
@@ -919,7 +928,7 @@ function createMusicTools({native=false,call=async()=>true,toast=()=>{},getSong=
   try{
    message('Đang kết xuất PDF trên thiết bị…');
    const pages=scorePages(data.score);
-   const pdf=await sheetPdfFromSvg(pages);
+   const pdf=await sheetPdfFromSvg(pages,data.score);
    downloadScore(pdf,'Goc_Hop_Am_Ban_Pho.pdf','application/pdf');
    message('PDF A4 '+pages.length+' trang đã sẵn sàng.');
   }catch(error){message(error.message||'Chưa xuất được PDF. Hãy thử In / lưu PDF.')}
@@ -953,6 +962,10 @@ function createMusicTools({native=false,call=async()=>true,toast=()=>{},getSong=
   }catch(e){event.preventDefault();message(e.message)}
  };
  el('music-find-pdf').onclick=()=>{dialog.close();onFindPdf()};
+ el('music-local-pdf').onclick=()=>loadDraft(async()=>{
+  const file=await readMusicAudio({native,call,kind:'pdf'});
+  if(file&&dialog.open)await localSheet.openLocal(file.bytes,file.name);
+ });
  for(const instrument of ['piano','organ'])el('music-make-'+instrument).onclick=()=>{
   try{
    stop();
@@ -1012,8 +1025,8 @@ let sourcePdfLoader;
 function loadSheetPdf(){if(globalThis.GocPdf)return Promise.resolve(globalThis.GocPdf);if(sourcePdfLoader)return sourcePdfLoader;sourcePdfLoader=new Promise((resolve,reject)=>{const script=document.createElement('script');script.src=new URL('vendor/pdf-engine.js',document.querySelector('script[src*="bundle.js"]')?.src||new URL('/mobile/bundle.js',location.href)).href;script.onload=()=>globalThis.GocPdf?resolve(globalThis.GocPdf):reject(new Error('Chưa mở được bộ đọc PDF.'));script.onerror=()=>{sourcePdfLoader=null;reject(new Error('Chưa tải được bộ đọc bản phổ.'))};document.head.append(script)});return sourcePdfLoader}
 const defaultSheetPath=song=>song?.sourceUrl?'/api/song-sheet?'+new URLSearchParams({url:song.sourceUrl}):'';
 function createSongSheet({host,getSong,native=false,call=async()=>true,toast=()=>{},onShow=()=>{},getSheetPath=defaultSheetPath,rawPdf=false,onMetadata=()=>{}}){
- const panel=document.createElement('section');panel.className='song-sheet';panel.hidden=true;panel.innerHTML='<div class="sheet-song-head"><strong>Bản phổ của bài đang mở</strong><button data-ss="close">Thu gọn bản phổ</button></div><p class="sheet-origin">Hiển thị tệp PDF từ bản phổ nguồn, giữ nguyên nốt, nhịp và dấu nghỉ. Tông của bản phổ có thể khác tông hợp âm bạn đang xem.</p><div class="ss-options"><label>Chọn bản phổ<select data-ss="files"></select></label></div><div class="ss-actions"><button data-ss="reload">↻ Tìm lại bản phổ</button><button data-ss="previous">← Trang trước</button><span data-ss="page"></span><button data-ss="next">Trang sau →</button><button data-ss="zoom-out">−</button><button data-ss="zoom-in">＋</button><button data-ss="pdf">PDF / In</button></div><p data-ss="status" role="status" aria-live="polite"></p><div class="ss-real-score"><canvas data-ss="canvas" aria-label="Trang bản phổ PDF"></canvas></div><p class="ss-source" data-ss="source"></p>';
- host.prepend(panel);const q=name=>panel.querySelector('[data-ss="'+name+'"]');let song,documentPdf,pdfTask,page=1,zoom=1,ticket=0,renderTicket=0,rendering;
+ const panel=document.createElement('section');panel.className='song-sheet';panel.hidden=true;panel.innerHTML='<div class="sheet-song-head"><strong>Bản phổ của bài đang mở</strong><button data-ss="close">Thu gọn bản phổ</button></div><p class="sheet-origin">Hiển thị tệp PDF từ bản phổ nguồn, giữ nguyên nốt, nhịp và dấu nghỉ. Tông của bản phổ có thể khác tông hợp âm bạn đang xem.</p><div class="ss-options" data-ss="options"><label>Chọn bản phổ<select data-ss="files"></select></label></div><div class="ss-actions"><button data-ss="reload">↻ Tìm lại bản phổ</button><button data-ss="previous">← Trang trước</button><span data-ss="page"></span><button data-ss="next">Trang sau →</button><button data-ss="zoom-out">−</button><button data-ss="zoom-in">＋</button><button data-ss="pdf">PDF / In</button></div><p data-ss="status" role="status" aria-live="polite"></p><div class="ss-real-score"><canvas data-ss="canvas" aria-label="Trang bản phổ PDF"></canvas></div><p class="ss-source" data-ss="source"></p>';
+ host.prepend(panel);const q=name=>panel.querySelector('[data-ss="'+name+'"]');let song,documentPdf,pdfTask,page=1,zoom=1,ticket=0,renderTicket=0,rendering,local=false;
  const path=()=>getSheetPath(song)+'&file='+encodeURIComponent(q('files').value||'0');
  async function api(value){const result=native?await call('api',{path:value}):await fetch(value).then(async r=>{const data=await r.json();if(!r.ok)throw new Error(data.error||'Chưa đọc được bản phổ.');return data});if(result.error)throw new Error(result.error);return result}
  function status(text){q('status').textContent=text}
@@ -1033,7 +1046,7 @@ function createSongSheet({host,getSong,native=false,call=async()=>true,toast=()=
    canvas.style.width=(zoom*100)+'%';canvas.width=Math.floor(viewport.width);canvas.height=Math.floor(viewport.height);
    rendering=current.render({canvasContext:canvas.getContext('2d'),viewport});await rendering.promise;
    if(token!==renderTicket)return;
-   buttons();status('Bản phổ PDF nguồn · '+pdf.numPages+' trang · giữ nguyên ký hiệu trong tệp.');
+   buttons();status((local?'Bản phổ PDF trên thiết bị':'Bản phổ PDF nguồn')+' · '+pdf.numPages+' trang · giữ nguyên ký hiệu trong tệp.');
   }catch(e){if(token===renderTicket&&e.name!=='RenderingCancelledException')status('Chưa hiển thị được bản phổ. Có thể dùng nút PDF / In.')}
  }
  async function loadFile(){
@@ -1058,12 +1071,25 @@ function createSongSheet({host,getSong,native=false,call=async()=>true,toast=()=
     }
     if(offset!==bytes.length)throw new Error('Tệp PDF chưa tải đủ.');
    }
-   const engine=await loadSheetPdf();if(token!==ticket)return;
-   pdfTask=engine.getDocument({data:bytes,isEvalSupported:false,useWasm:false,useSystemFonts:true,disableAutoFetch:true});
-   const pdf=await pdfTask.promise;
-   if(token!==ticket)return;
-   documentPdf=pdf;page=1;buttons();await render();
+   await installPdf(bytes,token);
   }catch(error){if(token===ticket)status(error.message)}
+ }
+ async function installPdf(bytes,token){
+  const engine=await loadSheetPdf();if(token!==ticket)return;
+  pdfTask=engine.getDocument({data:bytes,isEvalSupported:false,useWasm:false,useSystemFonts:true,disableAutoFetch:true});
+  const pdf=await pdfTask.promise;if(token!==ticket)return;
+  documentPdf=pdf;page=1;buttons();await render();
+ }
+ async function openLocal(buffer,name){
+  const bytes=new Uint8Array(buffer);
+  if(bytes.length>8000000)throw new Error('Chọn PDF tối đa 8 MB.');
+  if(new TextDecoder().decode(bytes.subarray(0,5))!=='%PDF-')throw new Error('Tệp đã chọn cần ở định dạng PDF.');
+  const token=++ticket;clearPdf();song=null;local=true;zoom=1;
+  q('options').hidden=true;
+  q('reload').hidden=q('pdf').hidden=true;
+  q('source').textContent=String(name||'PDF trên thiết bị').slice(0,180);
+  panel.hidden=false;onShow(true);status('Đang mở PDF trên thiết bị…');
+  try{await installPdf(bytes,token)}catch(error){if(token===ticket)status(error.message||'Chưa mở được PDF.')}
  }
  async function load(){
   song=getSong();const token=++ticket;clearPdf();q('files').replaceChildren();q('source').textContent='';
@@ -1075,13 +1101,15 @@ function createSongSheet({host,getSong,native=false,call=async()=>true,toast=()=
    const meta=await api(getSheetPath(song));if(token!==ticket)return;
    onMetadata(meta);
    for(const file of meta.files||[]){const option=document.createElement('option');option.value=file.index;option.textContent=file.name;q('files').append(option)}
-   q('source').textContent=meta.credit||(meta.available?'Nguồn bản phổ: Hợp Âm Việt · tác giả và người chép giữ nguyên trong PDF. Góc Hợp Âm · NPT Duy.':'');
+   q('source').textContent=meta.credit||(meta.available?'Tác giả và người chép được ghi trong bản phổ.':'');
    if(!meta.available){status(meta.reason||'Chưa có bản phổ của bài này. Không đủ dữ liệu để tự tạo đúng nốt và nhịp nghỉ.');return}
    await loadFile();
   }catch(error){if(token===ticket)status(error.message)}
  }
- q('close').onclick=()=>{panel.hidden=true;onShow(false)};q('reload').onclick=load;q('files').onchange=loadFile;q('previous').onclick=()=>{if(page>1){page--;render()}};q('next').onclick=()=>{if(documentPdf&&page<documentPdf.numPages){page++;render()}};q('zoom-in').onclick=()=>{zoom=Math.min(2,zoom+.2);render()};q('zoom-out').onclick=()=>{zoom=Math.max(.6,zoom-.2);render()};q('pdf').onclick=()=>{const pdfPath=path()+'&download=1';if(native)call('sheetExternal',{path:pdfPath}).catch(e=>toast(e.message));else window.open(pdfPath,'_blank','noopener')};buttons();
- return {setSong(){++ticket;clearPdf();song=null;panel.hidden=true;onShow(false)},open(){panel.hidden=false;onShow(true);panel.scrollIntoView({block:'start'});if(documentPdf)render();else load()},stop(){},refresh(){},highlightLine(){},get isOpen(){return !panel.hidden}};
+ function reset(){++ticket;clearPdf();song=null;local=false;panel.hidden=true;onShow(false);
+  q('options').hidden=false;q('reload').hidden=q('pdf').hidden=false;}
+ q('close').onclick=()=>{if(local)reset();else{panel.hidden=true;onShow(false)}};q('reload').onclick=load;q('files').onchange=loadFile;q('previous').onclick=()=>{if(page>1){page--;render()}};q('next').onclick=()=>{if(documentPdf&&page<documentPdf.numPages){page++;render()}};q('zoom-in').onclick=()=>{zoom=Math.min(2,zoom+.2);render()};q('zoom-out').onclick=()=>{zoom=Math.max(.6,zoom-.2);render()};q('pdf').onclick=()=>{const pdfPath=path()+'&download=1';if(native)call('sheetExternal',{path:pdfPath}).catch(e=>toast(e.message));else window.open(pdfPath,'_blank','noopener')};buttons();
+ return {setSong:reset,openLocal,open(){panel.hidden=false;onShow(true);panel.scrollIntoView({block:'start'});if(documentPdf)render();else load()},stop(){},refresh(){},highlightLine(){},get isOpen(){return !panel.hidden}};
 }
 
 const $=id=>document.getElementById(id),pending=new Map();let seq=0;
@@ -1241,7 +1269,6 @@ window.addEventListener('message',event=>{const frame=$('video-mount').querySele
 const studio=createStudio({call,native,toast,beforeRecord(){stopWebMetro();metroRunning=false;metroLabel()}});
 $('reader-options-close').addEventListener('click',()=>$('reader-options').open=false);
 
-$('github').addEventListener('click',()=>native?call('github'):window.open('https://github.com/duyuyd/goc-hop-am','_blank','noopener'));
 
 $('share-app').addEventListener('click',()=>call('share',{title:'Góc Hợp Âm',text:'Cùng tìm hợp âm và tập hát trên Góc Hợp Âm · NPT Duy',url:'https://gochopam.pages.dev/'}).catch(error=>toast(error.message)));
 

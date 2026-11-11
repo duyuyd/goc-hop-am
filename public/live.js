@@ -3,8 +3,8 @@ import {decodeEntities,escapeText} from './text.js';
 import {renderLyrics,readerFont} from './reader-format.js';
 import {inlinePlayer} from './inline-player.js?v=140';
 import {createFollow} from './mobile/follow.js?v=140';
-import {createMusicTools} from './mobile/music-tools.js?v=143';
-import {createSongSheet} from './mobile/song-sheet.js?v=142';
+import {createMusicTools} from './mobile/music-tools.js?v=145';
+import {createSongSheet} from './mobile/song-sheet.js?v=145';
 import {createStudio} from './mobile/studio.js?v=121';
 import {communitySongId,communitySongRef,songUrl as valid,songReferenceId,songReaderPath,validSong,parseOfflineSongs,offlineSongStorageKey,updateWebOfflineSong,findOfflineSongs} from './mobile/logic.js?v=142';
 (() => {

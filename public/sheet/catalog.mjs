@@ -1,6 +1,6 @@
 // Optional read-only link to the existing Sites catalog (no song/PDF copying).
 // This module gracefully degrades when the Sites API blocks cross-origin requests.
-import {SHEET_SOURCES,matchSheets,providerSearchUrl,safeSourceUrl} from "./sources.mjs?v=30";
+import {matchSheets,safeSourceUrl} from "./sources.mjs?v=31";
 import {trustedPdf} from "./registry.mjs";
 export const CATALOG_ENDPOINT="https://goc-hop-am.onwardcrust.chatgpt.site/api/catalog";
 export function parseCatalog(payload){
@@ -19,10 +19,9 @@ export function attachCatalog(target=document){
  if(!search||!results)return;
  const section=node("section");section.id="catalog-results";
  const heading=node("h2","Tìm bản phổ theo kho bài hiện tại");
- const expl=node("p","Tra tên bài trên Góc Hợp Âm; bản phổ chưa được xác nhận sẽ có liên kết tìm tại nguồn.","note");
  const status=node("p","Nhập ít nhất 3 ký tự để tra bài.","muted");status.setAttribute("aria-live","polite");
  const grid=node("div");grid.className="grid";
- section.append(heading,expl,status,grid);
+ section.append(heading,status,grid);
  results.after(section);
  let controller=null,seq=0,timer;
  async function lookup(){
@@ -44,22 +43,17 @@ export function attachCatalog(target=document){
     const card=node("article");card.className="card";
     card.append(node("h3",row.title),node("p",row.composer||row.singer||"Chưa có nhạc sĩ","muted"));
     const matches=matchSheets(row).filter(score=>score.format==="pdf-direct"?trustedPdf(score.url):safeSourceUrl(score.url));
-    for(const score of matches){
-      const source=SHEET_SOURCES.find(s=>s.id===score.sourceId);
-      const link=node("a",(score.format==="pdf-direct"?"PDF · ":"Bản phổ · ")+source.label);
+    for(const [index,score] of matches.entries()){
+      const link=node("a",(score.format==="pdf-direct"?"Mở PDF":"Mở trang bản phổ")+(matches.length>1?" "+(index+1):"")+" ↗");
       link.href=score.url;link.target="_blank";link.rel="noopener noreferrer";
       card.append(link);
     }
     if(!matches.length)card.append(node("p","Chưa đối chiếu được sheet theo nhạc sĩ.","note"));
-    const actions=node("div");actions.className="actions";
-    for(const src of [{id:"hopamnet",label:"Tìm hopam.net"},{id:"hav",label:"Tìm Hợp Âm Việt"},{id:"truongca",label:"Tìm Trường Ca"}]){
-      const a=node("a",src.label);a.href=providerSearchUrl(src.id,row.title+" "+row.composer);a.target="_blank";a.rel="noopener noreferrer";actions.append(a);
-    }
-    card.append(actions);grid.append(card);
+    grid.append(card);
    }
   }catch(e){
    if(e.name==="AbortError"||turn!==seq)return;
-   status.textContent="Không truy cập được API kho bài từ trang đang mở. Vẫn có thể tìm ở các nguồn bên trên.";
+   status.textContent="Chưa tra được kho hợp âm. Hãy thử lại sau.";
   }
  }
  search.addEventListener("input",()=>{clearTimeout(timer);timer=setTimeout(lookup,350)});

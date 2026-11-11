@@ -1,6 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {safeSheetFile,sheetPage,parseSourceSheet,parseSheetIndex,sourceSheet,sheetPdf,pdfChunk} from '../lib/source-sheets.mjs';
+import {openScoreFile,parseOpenScoreCatalog} from '../lib/openscore-catalog.mjs';
+
+test('orchestral catalogue distinguishes the full score and melody edition', () => {
+ const home='https://github.com/MarkGotham/Hauptstimme/blob/main/data/Bach/BWV232/01/';
+ const row='<tr><td>Bach, Johann Sebastian</td><td>B Minor Mass, BWV.232</td><td>01</td><td>.mscz</td>'+
+  '<td><a href="'+home+'Bach_01.mxl">.mxl</a></td><td><a href="'+home+'Bach_01_melody.mxl">melody.mxl</a></td></tr>';
+ const [score]=parseOpenScoreCatalog(row,'orchestra');
+ assert.equal(score.id,'orchestra-bach-01');
+ assert.equal(score.file,'https://raw.githubusercontent.com/MarkGotham/Hauptstimme/main/data/Bach/BWV232/01/Bach_01.mxl');
+ assert.equal(score.parts[0].name,'Giai điệu');
+ assert.match(score.parts[0].url,/Bach_01_melody\.mxl$/);
+ assert.equal(openScoreFile(home.replace('github.com','github.com.example.test')+'Bach_01.mxl','orchestra','mxl'),null);
+ assert.equal(openScoreFile(home.replace('/main/data/','/main/private/')+'Bach_01.mxl','orchestra','mxl'),null);
+});
 const song='https://hopamviet.vn/chord/song/bai-kiem-thu/ABC123.html',pdf='https://hopamviet.vn/assets/images/sheets/Score.pdf';
 test('sheet discovery uses actual linked PDF files and never fabricates notation or remote URLs',()=>{
  assert.equal(sheetPage(song),'https://hopamviet.vn/sheet/song/bai-kiem-thu/ABC123.html');
