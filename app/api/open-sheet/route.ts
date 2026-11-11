@@ -14,7 +14,8 @@ const failure = (error: string, status: number) => Response.json({error}, {
 function fileResponse(bytes: BodyInit, id: string, extension: 'pdf' | 'mxl') {
   return new Response(bytes, {headers: {
     ...cacheHeaders,
-    'Content-Type': extension === 'pdf' ? 'application/pdf' : 'application/vnd.recordare.musicxml',
+    // Compressed MusicXML is a ZIP file. Use an archive media type so intermediaries treat it as binary.
+    'Content-Type': extension === 'pdf' ? 'application/pdf' : 'application/zip',
     'Content-Disposition': 'inline; filename="' + id + '.' + extension + '"',
   }});
 }

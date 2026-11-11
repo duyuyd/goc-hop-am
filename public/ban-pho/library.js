@@ -59,6 +59,7 @@ async function renderXml(score, path, request) {
     await renderer.load(path);
     if (request !== xmlRequest || selected !== score) return;
     renderer.render();
+    if (!notation.querySelector('svg')) throw new Error('empty_notation');
     xmlStatus.textContent = 'Bản phổ MusicXML đã mở.';
   } catch {
     if (request === xmlRequest) xmlStatus.textContent = 'Chưa hiển thị được bản phổ. Có thể tải MusicXML gốc.';
@@ -66,7 +67,7 @@ async function renderXml(score, path, request) {
 }
 
 function showXml(score, edition) {
-  const path = location.origin + scorePath(score) + '&file=' + edition + '&download=1&name=' + score.id + '.mxl';
+  const path = location.origin + scorePath(score) + '&file=' + edition + '&download=1&v=32&name=' + score.id + '.mxl';
   byId('score-mxl-file').href = path;
   xmlHost.replaceChildren();
   renderXml(score, path, ++xmlRequest);
