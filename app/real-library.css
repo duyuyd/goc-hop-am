@@ -1,0 +1,61 @@
+.real-shell {
+  --real-bg: #0a0f18;
+  --real-card: #121a26;
+  --real-border: #263142;
+  --real-gold: #ff9f43;
+  --real-text: #f8fafc;
+  --real-muted: #94a3b8;
+  min-height: 100vh;
+  background: var(--real-bg);
+  color: var(--real-text);
+  font-family: Arial, Helvetica, sans-serif;
+  line-height: 1.5;
+}
+.real-shell *, .real-shell *::before, .real-shell *::after { box-sizing: border-box; }
+.real-shell a { color: inherit; text-decoration: none; }
+.real-container { max-width: 1140px; margin: 0 auto; padding: 0 20px 72px; }
+.real-topbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 20px; border-bottom: 1px solid var(--real-border); padding: 20px 0; }
+.real-topbar nav { display: flex; align-items: center; gap: 18px; font-size: 14px; }
+.real-topbar a:hover { color: var(--real-gold); }
+.real-brand { font-family: Georgia, serif; font-size: 24px; font-weight: 700; }
+.real-hero { padding: 48px 0 28px; }
+.real-eyebrow { color: var(--real-gold); font-size: 12px; font-weight: 700; letter-spacing: .1em; }
+.real-hero h1 { font-family: Georgia, serif; font-size: clamp(28px, 5vw, 46px); font-weight: 600; margin: 10px 0; }
+.real-hero p { color: var(--real-muted); font-size: 15px; }
+.real-banner { margin-top: 25px; padding: 15px 20px; border: 1px solid #78502b; background: #271e19; border-radius: 12px; color: #ffc48d; font-size: 14px; }
+.real-stat { color: #acb9c8; }
+.real-search { margin: 16px 0 36px; }
+.real-search label { display: block; color: var(--real-muted); margin-bottom: 9px; font-size: 13px; }
+.real-search > div { display: flex; border: 1px solid var(--real-border); padding: 5px; background: var(--real-card); border-radius: 10px; }
+.real-search input { flex: 1; min-width: 0; border: none; background: transparent; color: #fff; font-size: 15px; padding: 10px; outline: none; }
+.real-shell button, .real-pdf { cursor: pointer; border: 0; background: var(--real-gold); color: #22170c !important; font-weight: 700; border-radius: 8px; padding: 9px 18px; }
+.real-shell button:disabled { opacity: .35; cursor: not-allowed; }
+.real-heading { display: flex; justify-content: space-between; align-items: center; gap: 20px; margin-bottom: 14px; }
+.real-heading h2 { font-size: 20px; font-weight: 600; }
+.real-heading span { color: var(--real-muted); font-size: 13px; }
+.real-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.real-song { display: flex; align-items: center; gap: 14px; padding: 16px; border: 1px solid var(--real-border); border-radius: 10px; background: var(--real-card); }
+.real-note { color: var(--real-gold); font-size: 23px; }
+.real-song-body { min-width: 0; flex: 1; }
+.real-song-body a, .real-song-body strong { display: block; font-size: 15px; font-weight: 700; }
+.real-song-body a:hover { color: var(--real-gold); }
+.real-song-body p, .real-song-body small { margin: 4px 0; font-size: 12px; color: var(--real-muted); }
+.real-open { white-space: nowrap; color: var(--real-gold) !important; font-size: 12px; }
+.real-message { border: 1px solid var(--real-border); padding: 28px 20px; background: var(--real-card); border-radius: 12px; color: var(--real-muted); }
+.real-error { color: #fca5a5; border-color: #7f1d1d; }
+.real-error button { margin-top: 12px; }
+.real-pages { display: flex; justify-content: center; align-items: center; gap: 20px; margin: 26px 0; }
+.real-pages span { color: var(--real-muted); font-size: 14px; }
+.real-detail .real-hero { padding-top: 30px; }
+.real-score { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 18px; margin-top: 22px; }
+.real-score section { border-radius: 12px; border: 1px solid var(--real-border); padding: 20px; background: var(--real-card); min-width: 0; }
+.real-score h2 { color: var(--real-gold); font-size: 20px; margin: 0 0 14px; }
+.real-score pre { white-space: pre-wrap; overflow-wrap: anywhere; font-family: inherit; color: var(--real-text); font-size: 17px; line-height: 1.9; }
+.real-pdf { display: inline-block; text-decoration: none; margin-bottom: 12px; }
+@media (max-width: 700px) {
+  .real-container { padding: 0 15px 40px; }
+  .real-topbar nav { gap: 10px; }
+  .real-grid, .real-score { grid-template-columns: 1fr; }
+  .real-song { padding: 12px; }
+  .real-open { padding-left: 4px; }
+}
