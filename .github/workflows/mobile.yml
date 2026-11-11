@@ -35,7 +35,7 @@ jobs:
           cp -R mobile/build/ios-device/Build/Products/Release-iphoneos/GocHopAm.app mobile/build/Payload/
           cd mobile/build
           zip -qry release/Goc_Hop_Am_iOS_Chua_Ky.ipa Payload
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ios-unsigned-and-simulator
           path: mobile/build/release/*
@@ -67,7 +67,7 @@ jobs:
         run: |
           node mobile/scripts/prepare-web.mjs
           gradle -p mobile/android :app:bundleRelease --no-daemon
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: android-unsigned-aab
           path: mobile/android/app/build/outputs/bundle/release/*.aab
