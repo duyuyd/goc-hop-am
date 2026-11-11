@@ -14,6 +14,9 @@ type SongRow = {
   pdf_url: string | null;
   source_name: string;
   created_at: number;
+  sheet_key: string | null;
+  sheet_mime: string | null;
+  sheet_url: string | null;
 };
 
 export async function GET(request: Request, context: { params: Promise<{ slug: string }> }) {
@@ -28,12 +31,18 @@ export async function GET(request: Request, context: { params: Promise<{ slug: s
 
     const song = await db()
       .prepare(`SELECT id, title, artist, slug, chords_text, lyrics_text,
-                       has_pdf, pdf_url, source_name, created_at
+                       has_pdf, pdf_url, source_name, created_at, sheet_key, sheet_mime, sheet_url
                 FROM songs WHERE slug = ? LIMIT 1`)
       .bind(slug)
       .first<SongRow>();
 
-    return song ? json({ song }) : json({ error: 'Không tìm thấy bài hát.' }, 404);
+    if (!song) return json({ error: 'Không tìm thấy bài hát.' }, 404);
+    const publicSheet = song.sheet_key ? new URL('/api/sheets/' + slug, request.url).href : null;
+    const { sheet_key: _sheetKey, sheet_mime, ...safe } = song;
+    return json({ song: { ...safe, sheet_url: publicSheet,
+      pdf_url: sheet_mime === 'application/pdf' && publicSheet ? publicSheet : song.pdf_url,
+      has_pdf: sheet_mime === 'application/pdf' && publicSheet ? 1 : song.has_pdf,
+    } });
   } catch (error) {
     return failure(error);
   }
