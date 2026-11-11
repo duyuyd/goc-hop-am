@@ -3,6 +3,7 @@ import {
 } from '../../../../lib/accounts';
 import { boundedBytes } from '../../../../lib/security';
 import { parseSongImport } from '../../../../lib/song-import';
+import { syncSongSheets } from '../../../../lib/song-sheet-sync';
 
 export const dynamic = 'force-dynamic';
 
@@ -84,6 +85,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  if (request.headers.has('authorization')) return syncSongSheets(request);
+
   let authenticated = false;
   let processed = 0;
   try {

@@ -1,0 +1,89 @@
+name: Đồng bộ bản phổ
+
+on:
+  schedule:
+    - cron: '17 21 * * *'
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Nhập danh mục đã duyệt vào Sites từ main'
+        type: boolean
+        default: false
+  pull_request:
+    paths:
+      - '.github/workflows/crawl.yml'
+      - 'app/api/admin/sync/**'
+      - 'app/api/song-sheets/**'
+      - 'app/api/songs/**'
+      - 'app/api/stats/**'
+      - 'cloudflare-env.d.ts'
+      - 'db/**'
+      - 'drizzle/**'
+      - 'lib/accounts.ts'
+      - 'lib/security.ts'
+      - 'lib/song-import.ts'
+      - 'lib/song-sheet-sync.ts'
+      - 'public/member.js'
+      - 'scripts/collector.py'
+      - 'scripts/report.py'
+      - 'tests/helpers/runtime.mjs'
+      - 'tests/song-sheet-sync.test.mjs'
+      - 'tests/test_sheet_pipeline.py'
+      - 'package*.json'
+
+permissions:
+  contents: read
+
+jobs:
+  qa:
+    if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && !inputs.publish)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Kiểm tra bộ thu thập và báo cáo
+        run: python3 -m unittest discover -s tests -p test_sheet_pipeline.py -v
+      - name: Kiểm tra API ghi D1 và đọc tệp R2
+        run: |
+          npm run install:ci
+          node --test tests/song-sheet-sync.test.mjs tests/crawling.test.mjs
+
+  sync:
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      ((github.event_name == 'schedule' && vars.SHEET_FEED_URL != '' && vars.SHEET_SOURCE_HOSTS != '')
+      || (github.event_name == 'workflow_dispatch' && inputs.publish))
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    concurrency:
+      group: sheet-sync-production
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        id: checkout
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Nhập bản phổ từ nguồn đã duyệt
+        env:
+          SHEET_FEED_URL: ${{ vars.SHEET_FEED_URL }}
+          SHEET_SOURCE_HOSTS: ${{ vars.SHEET_SOURCE_HOSTS }}
+          SHEET_SYNC_ORIGIN: https://goc-hop-am.onwardcrust.chatgpt.site
+          SHEET_SYNC_TOKEN: ${{ secrets.SHEET_SYNC_TOKEN }}
+        run: python3 scripts/collector.py --summary "$RUNNER_TEMP/sheet-sync-summary.json"
+      - name: Báo cáo kết quả
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
+        env:
+          SHEET_TELEGRAM_BOT_TOKEN: ${{ secrets.SHEET_TELEGRAM_BOT_TOKEN }}
+          SHEET_TELEGRAM_CHAT_ID: ${{ secrets.SHEET_TELEGRAM_CHAT_ID }}
+        run: python3 scripts/report.py --summary "$RUNNER_TEMP/sheet-sync-summary.json"
