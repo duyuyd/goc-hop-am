@@ -70,6 +70,39 @@ class PipelineSmokeTest(unittest.TestCase):
                 self.assertEqual(result["collected"], 0)
                 self.assertTrue(result["blocked"])
 
+    def test_sync_ten_rows_only_checkpoints_after_confirmed_import(self):
+        from sync import sync
+        with tempfile.TemporaryDirectory() as temp:
+            temp = Path(temp)
+            data = [{"title": f"QA {i}", "artist": "QA", "slug": f"qa-{i}",
+                     "chords_text": "C", "lyrics_text": "Original QA",
+                     "has_pdf": False, "pdf_url": None, "source_name": "QA fixture"}
+                    for i in range(10)]
+            (temp / "songs.json").write_text(json.dumps(data), encoding="utf-8")
+            batches = []
+
+            def handler(request):
+                if request.url.path == "/api/stats":
+                    return httpx.Response(200, json={"total_songs": 42 + sum(map(len, batches))})
+                if request.url.path == "/api/admin/sync":
+                    assert request.headers.get("authorization", "").startswith("Bearer ")
+                    batch = json.loads(request.content)
+                    batches.append(batch)
+                    return httpx.Response(200, json={
+                        "ok": True, "processed": len(batch), "inserted": len(batch),
+                        "total_songs": 42 + sum(map(len, batches)),
+                    })
+                return httpx.Response(404)
+
+            with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+                report = sync(temp / "songs.json", temp / "history.json", temp / "report.json",
+                              "https://music.example.org", "a" * 48, client)
+            self.assertEqual(report["accepted"], 10)
+            self.assertEqual(report["added"], 10)
+            self.assertEqual(report["total"], 52)
+            self.assertEqual(len(batches), 1)
+            self.assertEqual(len(json.loads((temp / "history.json").read_text())["synced_slugs"]), 10)
+
     def test_allowed_host_is_exact_not_suffix(self):
         self.assertTrue(allowed("https://example.org/a", ["example.org"]))
         self.assertFalse(allowed("https://example.org.attacker.invalid/a", ["example.org"]))
