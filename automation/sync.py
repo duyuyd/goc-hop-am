@@ -69,6 +69,7 @@ def sync(output_path: Path, history_path: Path, report_path: Path, api_base: str
                 report["errors"].append("Sync did not confirm the entire batch")
                 break
             report["accepted"] += len(batch)
+            report["added"] += int(result.get("inserted", 0))
             report["total"] = result.get("total_songs")
             synced.update(row["slug"] for row in batch)
             history["synced_slugs"] = sorted(synced)
@@ -76,8 +77,9 @@ def sync(output_path: Path, history_path: Path, report_path: Path, api_base: str
         stats = client.get(base + "/api/stats")
         if stats.status_code == 200:
             report["total"] = stats.json().get("total_songs")
-        if isinstance(before, int) and isinstance(report["total"], int):
-            report["added"] = max(0, report["total"] - before)
+        # Backend returns inserted count; do not count updated records as new.
+        if report["accepted"] and report["added"] == 0 and before is not None:
+            report["observed_delta"] = max(0, int(report["total"] or 0) - int(before))
     finally:
         if own_client:
             client.close()
