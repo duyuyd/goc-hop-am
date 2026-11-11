@@ -62,6 +62,35 @@ export async function GET(request: Request) {
     ]);
 
     const total = Number(countRow?.total ?? 0);
+    if (total === 0) {
+      // Keep already-published community songs searchable until the UI is migrated.
+      const legacyTerm = '%' + q + '%';
+      const legacyFilter = q ? 'AND (title LIKE ? OR author LIKE ?)' : '';
+      const legacyBinds = q ? [legacyTerm, legacyTerm] : [];
+      const [legacyCount, legacyItems] = await Promise.all([
+        database.prepare(`SELECT COUNT(*) AS total FROM community_songs WHERE published = 1 ${legacyFilter}`)
+          .bind(...legacyBinds).first<{ total: number }>(),
+        database.prepare(`
+          SELECT id, title, author, author AS artist, genre, rhythm, key,
+                 NULL AS slug, 0 AS has_pdf, NULL AS pdf_url,
+                 'Bài cộng đồng' AS source_name, created_at
+          FROM community_songs
+          WHERE published = 1 ${legacyFilter}
+          ORDER BY updated_at DESC LIMIT ? OFFSET ?
+        `).bind(...legacyBinds, limit, (page - 1) * limit).all(),
+      ]);
+      const legacyTotal = Number(legacyCount?.total ?? 0);
+      return json({
+        items: legacyItems.results || [],
+        total: legacyTotal,
+        page,
+        limit,
+        hasMore: page * limit < legacyTotal,
+        query: q,
+        catalog: 'community',
+      });
+    }
+
     return json({
       items: items.results || [],
       total,
@@ -69,6 +98,7 @@ export async function GET(request: Request) {
       limit,
       hasMore: page * limit < total,
       query: q,
+      catalog: 'imported',
     });
   } catch (error) {
     return failure(error);
