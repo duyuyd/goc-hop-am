@@ -1,0 +1,71 @@
+name: Góc Hợp Âm – nguồn sheet tự động
+on:
+  schedule:
+    - cron: '20 23 * * *' # 06:20 Asia/Ho_Chi_Minh (+07)
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: goc-hop-am-sheet-pipeline
+  cancel-in-progress: false
+jobs:
+  collect-and-sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: automation/requirements.txt
+      - name: Install collector dependencies
+        run: python -m pip install -r automation/requirements.txt
+      - name: Restore crawler history
+        uses: actions/cache/restore@v4
+        with:
+          path: automation/history.json
+          key: sheet-state-${{ github.run_id }}
+          restore-keys: sheet-state-
+      - name: Create state file if missing
+        run: test -f automation/history.json || echo '{"synced_slugs":[]}' > automation/history.json
+      - name: QA – 10 local records (no network)
+        run: python -m unittest discover -s tests -p 'test_sheet_pipeline.py' -v
+      - name: Collect reachable, allowlisted sources
+        id: collect
+        run: python automation/collector.py --config automation/sources.json --max-songs 100
+        env:
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+      - name: Import into Cloudflare D1 via API
+        id: sync
+        if: steps.collect.outcome == 'success'
+        run: python automation/sync.py
+        env:
+          SITE_BASE_URL: ${{ vars.SITE_BASE_URL }}
+          SYNC_INGEST_TOKEN: ${{ secrets.SYNC_INGEST_TOKEN }}
+      - name: Daily report
+        if: always()
+        run: python automation/report.py
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      - name: Save checkpoint
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: automation/history.json
+          key: sheet-state-${{ github.run_id }}
+      - name: Export audit files
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sheet-pipeline-${{ github.run_id }}
+          path: |
+            automation/history.json
+            automation/collection_report.json
+            automation/sync_report.json
+          if-no-files-found: warn
+          retention-days: 7

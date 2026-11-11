@@ -1,0 +1,18 @@
+{
+  "sources": [
+    {
+      "name": "My music catalog",
+      "index_urls": ["https://music.example.org/songs"],
+      "allowed_hosts": ["music.example.org"],
+      "allowed_asset_hosts": ["music.example.org", "assets.example.org"],
+      "selectors": {
+        "song_links": ".song-list a[href]",
+        "title": "h1",
+        "artist": ".artist",
+        "chords": ".chords",
+        "lyrics": ".lyrics",
+        "assets": ".sheet a[href], .sheet iframe[src], .sheet img[src]"
+      }
+    }
+  ]
+}

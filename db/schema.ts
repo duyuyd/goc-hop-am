@@ -38,12 +38,16 @@ export const songs = sqliteTable('songs', {
   lyricsText: text('lyrics_text').notNull().default(''),
   hasPdf: integer('has_pdf').notNull().default(0),
   pdfUrl: text('pdf_url'),
+  sheetKey: text('sheet_key'),
+  sheetMime: text('sheet_mime'),
+  sheetUrl: text('sheet_url'),
   sourceName: text('source_name').notNull().default('Tệp nhập'),
   createdAt: integer('created_at').notNull(),
 }, table => [
   index('songs_title_idx').on(table.title),
   index('songs_artist_idx').on(table.artist),
   index('songs_created_at_idx').on(table.createdAt),
+  index('songs_sheet_key_idx').on(table.sheetKey),
 ]);
 
 export const syncLogs = sqliteTable('sync_logs', {
