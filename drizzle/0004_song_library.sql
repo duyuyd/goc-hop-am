@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS songs (
   id TEXT PRIMARY KEY NOT NULL,
   title TEXT NOT NULL,
   artist TEXT NOT NULL DEFAULT '',
-  slug TEXT NOT NULL UNIQUE,
+  slug TEXT NOT NULL,
   chords_text TEXT NOT NULL DEFAULT '',
   lyrics_text TEXT NOT NULL DEFAULT '',
   has_pdf INTEGER NOT NULL DEFAULT 0 CHECK (has_pdf IN (0, 1)),
@@ -11,6 +11,8 @@ CREATE TABLE IF NOT EXISTS songs (
   source_name TEXT NOT NULL DEFAULT 'Tệp nhập',
   created_at INTEGER NOT NULL
 );
+--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS songs_slug_unique ON songs (slug);
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS songs_title_idx ON songs (title);
 --> statement-breakpoint
