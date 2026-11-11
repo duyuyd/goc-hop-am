@@ -1,6 +1,6 @@
 // Optional read-only link to the existing Sites catalog (no song/PDF copying).
 // This module gracefully degrades when the Sites API blocks cross-origin requests.
-import {matchSheet,providerSearchUrl,safeSourceUrl} from "./sources.mjs";
+import {SHEET_SOURCES,matchSheets,providerSearchUrl,safeSourceUrl} from "./sources.mjs?v=30";
 import {trustedPdf} from "./registry.mjs";
 export const CATALOG_ENDPOINT="https://goc-hop-am.onwardcrust.chatgpt.site/api/catalog";
 export function parseCatalog(payload){
@@ -39,20 +39,20 @@ export function attachCatalog(target=document){
    if(!response.ok)throw Error("API "+response.status);
    const rows=parseCatalog(await response.json());
    if(turn!==seq)return;
-   status.textContent=rows.length?"Tìm thấy "+rows.length+" bài trong trang kết quả API. Đây chưa phải số lượng PDF.":"Không tìm thấy bài trùng tên trong lần tra cứu này.";
+   status.textContent=rows.length?"Tìm thấy "+rows.length+" bài trong kho hợp âm.":"Không tìm thấy bài trùng tên trong lần tra cứu này.";
    for(const row of rows){
     const card=node("article");card.className="card";
     card.append(node("h3",row.title),node("p",row.composer||row.singer||"Chưa có nhạc sĩ","muted"));
-    const exact=matchSheet({title:row.title,composer:row.composer});
-    if(exact && ((exact.format==="pdf-direct"&&trustedPdf(exact.url))||(exact.format==="sheet-page"&&safeSourceUrl(exact.url)))){
-      const found=node("a",exact.format==="pdf-direct"?"PDF đúng bài, đúng nhạc sĩ":"Sheet đúng bài, đúng nhạc sĩ");
-      found.href=exact.url;found.target="_blank";found.rel="noopener noreferrer";
-      card.append(found);
-    }else{
-      card.append(node("p","Chưa đối chiếu được sheet theo nhạc sĩ.","note"));
+    const matches=matchSheets(row).filter(score=>score.format==="pdf-direct"?trustedPdf(score.url):safeSourceUrl(score.url));
+    for(const score of matches){
+      const source=SHEET_SOURCES.find(s=>s.id===score.sourceId);
+      const link=node("a",(score.format==="pdf-direct"?"PDF · ":"Bản phổ · ")+source.label);
+      link.href=score.url;link.target="_blank";link.rel="noopener noreferrer";
+      card.append(link);
     }
+    if(!matches.length)card.append(node("p","Chưa đối chiếu được sheet theo nhạc sĩ.","note"));
     const actions=node("div");actions.className="actions";
-    for(const src of [{id:"hopamnet",label:"Tìm hopam.net"},{id:"hav",label:"Tìm Hợp Âm Việt"}]){
+    for(const src of [{id:"hopamnet",label:"Tìm hopam.net"},{id:"hav",label:"Tìm Hợp Âm Việt"},{id:"truongca",label:"Tìm Trường Ca"}]){
       const a=node("a",src.label);a.href=providerSearchUrl(src.id,row.title+" "+row.composer);a.target="_blank";a.rel="noopener noreferrer";actions.append(a);
     }
     card.append(actions);grid.append(card);

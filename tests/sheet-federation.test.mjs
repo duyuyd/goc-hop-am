@@ -1,10 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {SHEET_SOURCES,SHEET_PAGES,GENRES,safeSourceUrl,providerSearchUrl,allRecords,searchRecords,matchSheet} from "../public/sheet/sources.mjs";
+import {SHEET_SOURCES,SHEET_PAGES,GENRES,safeSourceUrl,providerSearchUrl,allRecords,searchRecords,matchSheet,matchSheets,groupSheetRecords} from "../public/sheet/sources.mjs";
 import {SCORE_PDFS,trustedPdf} from "../public/sheet/registry.mjs";
-test("federation retains 8 distinct named source websites",()=>{
- assert.equal(SHEET_SOURCES.length,8);
- assert.equal(new Set(SHEET_SOURCES.map(x=>x.domain)).size,8);
+test("federation retains the existing libraries and distinct source websites",()=>{
+ const ids=new Set(SHEET_SOURCES.map(x=>x.id));
+ for(const id of ["hopamnet","hav","mutopia","musopen","imslp","openscore","musescore","commons","truongca","bachkhoa","harpsheet","khuyennhac"])assert.ok(ids.has(id));
+ assert.equal(new Set(SHEET_SOURCES.map(x=>x.domain)).size,SHEET_SOURCES.length);
  for(const s of SHEET_SOURCES)assert.ok(s.home.startsWith("https://"));
 });
 test("direct PDFs remain distinct from source-owned sheet pages",()=>{
@@ -39,6 +40,23 @@ test("exact title plus composer is required for linking",()=>{
  assert.equal(matchSheet({title:"Chiều ngồi bên sông Hoài"}),null);
  assert.equal(matchSheet({title:"Chiều ngồi bên sông Hoài",composer:"Sai tên"}),null);
  assert.equal(matchSheet({title:"Chiều ngồi bên sông Hoài",composer:"Nguyễn Nho Khiêm - Phan Bảo Nam"}).id,"hn-chieu-hoai");
+});
+test("different editions of a song share one result and retain their source links",()=>{
+ const [work]=groupSheetRecords(searchRecords({q:"thang tu la loi noi doi cua em",genre:"Nhạc Trẻ"}));
+ assert.equal(work.composer,"Phạm Toàn Thắng");
+ assert.deepEqual(new Set(work.records.map(x=>x.sourceId)),new Set(["hav","truongca","cungtapnhac","pianongocdiep"]));
+ assert.equal(matchSheets({title:"Tháng tư là lời nói dối của em",composer:"Phạm Toàn Thắng"}).length,4);
+ assert.equal(matchSheets({title:work.title,composer:"Khác"}).length,0);
+ assert.equal(groupSheetRecords([...work.records,{...work.records[0],composer:"Khác"}]).length,2);
+});
+test("the source-mark filter includes observed marks and verified alternate editions",()=>{
+ const works=groupSheetRecords(searchRecords({kind:"credit",genre:"Nhạc Trẻ"}));
+ assert.deepEqual(new Set(works.map(work=>work.mark.sourceId).filter(Boolean)),new Set(["bachkhoa","harpsheet","khuyennhac","vnguitar"]));
+ assert.ok(works.every(work=>work.mark.url?safeSourceUrl(work.mark.url):work.mark.label));
+ const harp=works.find(work=>work.mark.sourceId==="harpsheet");
+ assert.ok(harp.records.some(score=>score.url===harp.mark.url));
+ assert.equal(groupSheetRecords(searchRecords({q:"vnsheet.net",kind:"credit"})).length,2);
+ assert.equal(groupSheetRecords(searchRecords({kind:"credit",q:"em gai mua"})).length,0);
 });
 test("malicious and lookalike source domains are rejected",()=>{
  for(const x of ["http://hopam.net/sheet","https://hopam.net.evil.example/sheet","javascript:alert(1)","https://admin:pass@hopam.net/sheet","https://hopam.net/sheet/#hack"])assert.equal(safeSourceUrl(x),false);

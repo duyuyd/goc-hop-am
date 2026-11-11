@@ -13,13 +13,13 @@ test("PDF library includes accessible mobile search and a visible fallback PDF l
  assert.match(html,/id="viewer"/);
  assert.match(html,/id="pdfLink"/);
  assert.match(html,/Nếu trình duyệt Android không hiển thị PDF/);
- assert.match(html,/<script type="module" src="\.\/catalog\.mjs"><\/script>/);
+ assert.match(html,/<script type="module" src="\.\/catalog\.mjs(?:\?v=\d+)?"><\/script>/);
 });
 test("mobile app has a discoverable PDF library route",()=>{
  assert.match(mobile,/href="\/sheet\/"[^>]*>♫ Thư viện PDF/);
 });
 test("all direct PDFs use verified allowlisted source URLs",()=>{
- assert.equal(SHEET_SOURCES.length,8);
+ assert.ok(SHEET_SOURCES.some(source=>source.id==="truongca"));
  for(const item of allRecords()){
   assert.ok(safeSourceUrl(item.url),item.title);
   if(item.format==="pdf-direct")assert.ok(trustedPdf(item.url),item.title);

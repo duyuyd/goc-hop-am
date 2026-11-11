@@ -20,8 +20,9 @@ input:focus,select:focus,a:focus-visible,button:focus-visible{outline:3px solid 
 .stats{display:flex;gap:12px;flex-wrap:wrap;font-size:.9rem;margin:10px 0 16px;color:#d9cce2}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
 .card{background:#261b32;border:1px solid #574765;border-radius:13px;padding:16px;display:flex;flex-direction:column;gap:6px}
-.card .tag{color:#e9d0a1;font-size:.78rem;text-transform:uppercase;letter-spacing:.04em}
-.card p{font-size:.88rem;margin:0}.card .action{margin-top:auto;padding-top:10px}
+.card p{font-size:.88rem;margin:0}
+.card .score-links{margin:4px 0 0;padding:0;list-style:none;display:grid;gap:8px}
+.score-links small{display:block}.mark{border-top:1px solid #574765;padding-top:8px}
 button{border:1px solid #cfac68;background:#362644;color:#fff;border-radius:9px;padding:9px 12px;cursor:pointer;font:inherit}
 button:hover{background:#4c3158}.empty{border:1px dashed #7d6385;padding:18px;border-radius:12px}
 .source-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(225px,1fr));gap:10px}
@@ -29,7 +30,7 @@ button:hover{background:#4c3158}.empty{border:1px dashed #7d6385;padding:18px;bo
 .source a{display:inline-block;margin-top:8px}
 .viewer{position:relative;margin:20px 0;padding:16px;border:1px solid #78638a;border-radius:14px;background:#23192e}
 .viewer[hidden]{display:none}.viewer iframe{display:block;width:100%;height:min(76vh,850px);background:#fff;border:0;border-radius:8px}
-.actions{display:flex;gap:16px;flex-wrap:wrap;margin:12px 0}.close{float:right}
+.actions{display:flex;gap:16px;flex-wrap:wrap;margin:12px 0}.actions[hidden]{display:none}.close{float:right}
 .note{font-size:.86rem;color:#d3c7d9}
 @media(max-width:800px){.controls{grid-template-columns:repeat(2,minmax(0,1fr))}.controls label:first-child{grid-column:1/-1}}
 @media(max-width:480px){.controls{grid-template-columns:1fr}.controls label:first-child{grid-column:auto}.viewer iframe{height:65vh}}
@@ -37,15 +38,19 @@ button:hover{background:#4c3158}.empty{border:1px dashed #7d6385;padding:18px;bo
 <body>
 <header><div class="inner"><h1>Tra bản phổ</h1><p>Tìm theo tên bài, nhạc sĩ hoặc thư viện nguồn.</p></div></header>
 <main>
-<nav class="actions" aria-label="Thư viện bản phổ"><a href="/ban-pho/">← Kho bản phổ mở</a><a href="/sheet/?genre=nhac-tre">Nhạc trẻ</a><a id="young-directory" target="_blank" rel="noopener noreferrer" hidden>Danh mục Nhạc Trẻ tại Hợp Âm Việt</a></nav>
+<nav class="actions" aria-label="Thư viện bản phổ">
+ <a href="/ban-pho/">← Kho bản phổ mở</a>
+ <a href="/sheet/?genre=nhac-tre">Nhạc trẻ</a>
+ <a href="/sheet/?genre=nhac-tre&amp;kind=credit">Bài có dấu nguồn</a>
+</nav>
 <form id="search" class="controls" role="search">
 <label for="q">Tên bài / nhạc sĩ<input type="search" id="q" maxlength="140" placeholder="Ví dụ: Chiều ngồi bên sông Hoài"></label>
 <label for="source">Website nguồn<select id="source"><option value="all">Tất cả nguồn</option></select></label>
 <label for="genre">Thể loại<select id="genre"><option value="all">Tất cả thể loại</option></select></label>
-<label for="kind">Định dạng<select id="kind"><option value="all">Mọi bản phổ</option><option value="pdf">PDF trực tiếp</option><option value="page">Trang sheet gốc</option></select></label>
+<label for="kind">Loại kết quả<select id="kind"><option value="all">Mọi bản phổ</option><option value="pdf">PDF trực tiếp</option><option value="page">Trang bản phổ</option><option value="credit">Có dấu nguồn</option></select></label>
 <label for="sort">Sắp xếp<select id="sort"><option value="az">Tên A–Z</option><option value="za">Tên Z–A</option></select></label>
 </form>
-<div class="stats" aria-live="polite"><span id="count"></span><span id="directCount"></span></div>
+<div class="stats" aria-live="polite"><span id="count"></span><span id="sourceCount"></span><span id="directCount"></span></div>
 <section id="viewer" class="viewer" hidden aria-label="Trình xem bản phổ PDF">
 <button type="button" id="close" class="close">Đóng ×</button><h2 id="viewTitle"></h2>
 <p id="viewMeta" class="muted"></p><div class="actions"><a id="pdfLink" target="_blank" rel="noopener noreferrer">Mở / tải PDF nguồn</a><a id="sourceLink" target="_blank" rel="noopener noreferrer">Xem nguồn và giấy phép</a></div>
@@ -55,20 +60,29 @@ button:hover{background:#4c3158}.empty{border:1px dashed #7d6385;padding:18px;bo
 <h2>Bản phổ đã nhận diện</h2>
 <div id="results" class="grid"></div>
 <h2>Tìm thêm sheet từ các thư viện</h2>
-<p class="note">Những nút bên dưới tìm trên từng website bằng tên bài hoặc tác giả anh nhập. Kết quả bên ngoài chưa được xác minh là có PDF.</p>
+<nav id="young-directories" class="actions" aria-label="Danh mục nhạc trẻ tại nguồn" hidden>
+ <a id="young-directory" target="_blank" rel="noopener noreferrer">Nhạc trẻ tại Hợp Âm Việt</a>
+ <a id="truongca-directory" target="_blank" rel="noopener noreferrer">Nhạc trẻ tại Trường Ca</a>
+</nav>
 <div class="source-list" id="sourceList"></div>
 </main>
 <script type="module">
 import {trustedPdf} from "./registry.mjs";
-import {GENRES,SHEET_SOURCES,YOUNG_SHEET_DIRECTORY,searchRecords,providerSearchUrl,safeSourceUrl} from "./sources.mjs?v=29";
+import {GENRES,SHEET_SOURCES,YOUNG_SHEET_DIRECTORY,TRUONG_CA_YOUNG_DIRECTORY,groupSheetRecords,searchRecords,providerSearchUrl,safeSourceUrl} from "./sources.mjs?v=30";
 const $=id=>document.getElementById(id);
 const params=new URLSearchParams(location.search);
 $("q").value=(params.get("q")||"").slice(0,140);
 for(const s of SHEET_SOURCES){const o=document.createElement("option");o.value=s.id;o.textContent=s.label;$("source").append(o)}
 for(const g of GENRES){const o=document.createElement("option");o.value=g;o.textContent=g;$("genre").append(o)}
 if(params.get("genre")==="nhac-tre")$("genre").value="Nhạc Trẻ";
+for(const id of ["source","kind"]){
+ const value=params.get(id);
+ if([...$(id).options].some(option=>option.value===value))$(id).value=value;
+}
 $("young-directory").href=YOUNG_SHEET_DIRECTORY;
+$("truongca-directory").href=TRUONG_CA_YOUNG_DIRECTORY;
 function element(tag,className,text){const n=document.createElement(tag);if(className)n.className=className;if(text!==undefined)n.textContent=text;return n}
+function sourceLink(label,url){const a=element("a","",label);a.href=url;a.target="_blank";a.rel="noopener noreferrer";return a}
 function openPdf(s){
   if(!trustedPdf(s.url))return;
   $("viewTitle").textContent=s.title+" — "+s.composer;
@@ -93,35 +107,53 @@ function showSources(){
 }
 function render(){
  const found=searchRecords({q:$("q").value,source:$("source").value,genre:$("genre").value,kind:$("kind").value,sort:$("sort").value});
+ const groups=groupSheetRecords(found);
  const direct=found.filter(x=>x.format==="pdf-direct").length;
- $("count").textContent=(found.length-direct)+" trang bản phổ tại nguồn";
- $("directCount").textContent=direct+" PDF trực tiếp";
- $("young-directory").hidden=$("genre").value!=="Nhạc Trẻ";
+ $("count").textContent=groups.length+" bài";
+ $("sourceCount").textContent=(found.length-direct)+" trang bản phổ tại nguồn";
+ $("directCount").textContent=direct ? direct+" PDF trực tiếp" : "";
+ $("young-directories").hidden=$("genre").value!=="Nhạc Trẻ";
  const root=$("results");root.replaceChildren();
- for(const s of found){
+ for(const group of groups){
    const card=element("article","card");
-   card.append(element("span","tag",s.format==="pdf-direct"?"PDF trực tiếp":"Trang sheet nguồn"),
-     element("h3","",s.title),element("p","muted",s.composer),element("p","",s.genre||"Bản phổ"));
-   const src=SHEET_SOURCES.find(p=>p.id===s.sourceId);
-   card.append(element("p","muted small",src?.label||"Nguồn chưa rõ"));
-   const action=element("div","action");
-   if(s.format==="pdf-direct"&&trustedPdf(s.url)){
-     const b=element("button","","Xem PDF");b.type="button";b.addEventListener("click",()=>openPdf(s));action.append(b);
-   } else if(s.format==="sheet-page"&&safeSourceUrl(s.url)){
-     const a=element("a","","Xem sheet tại nguồn");a.href=s.url;a.target="_blank";a.rel="noopener noreferrer";action.append(a);
+   card.append(element("h3","",group.title),element("p","muted",group.composer));
+   const list=element("ul","score-links");
+   for(const s of group.records){
+     const item=element("li");
+     const src=SHEET_SOURCES.find(p=>p.id===s.sourceId);
+     if(s.format==="pdf-direct"&&trustedPdf(s.url)){
+       const b=element("button","","Xem PDF · "+src.label);b.type="button";b.addEventListener("click",()=>openPdf(s));item.append(b);
+     }else if(s.format==="sheet-page"&&safeSourceUrl(s.url)){
+       item.append(sourceLink("Mở tại "+src.label,s.url));
+       if(s.edition)item.append(element("small","muted",s.edition));
+     }
+     if(item.childElementCount)list.append(item);
    }
-   card.append(action);root.append(card);
+   card.append(list);
+   if(group.mark){
+     const label=group.mark.label||SHEET_SOURCES.find(p=>p.id===group.mark.sourceId)?.label;
+     const hasLink=safeSourceUrl(group.mark.url)&&!group.records.some(record=>record.url===group.mark.url);
+     const mark=element("div","mark");
+     mark.append(element("p","muted small","Dấu nguồn trên bản Hợp Âm Việt"),
+       hasLink?sourceLink(label,group.mark.url):element("strong","small",label),
+       element("p","muted small",group.mark.detail));
+     card.append(mark);
+   }
+   root.append(card);
  }
  if(!found.length){root.append(element("p","empty","Chưa có kết quả. Anh có thể tra thêm tại các thư viện bên dưới."))}
  showSources();
  const u=new URL(location.href);
  if($("q").value.trim())u.searchParams.set("q",$("q").value.trim());else u.searchParams.delete("q");
  if($("genre").value==="Nhạc Trẻ")u.searchParams.set("genre","nhac-tre");else u.searchParams.delete("genre");
+ for(const id of ["source","kind"]){
+   if($(id).value==="all")u.searchParams.delete(id);else u.searchParams.set(id,$(id).value);
+ }
  history.replaceState(null,"",u.pathname+u.search);
 }
 for(const id of ["q","source","genre","kind","sort"])$(id).addEventListener(id==="q"?"input":"change",render);
 $("search").addEventListener("submit",e=>{e.preventDefault();render()});
 render();
 </script>
-<script type="module" src="./catalog.mjs"></script>
+<script type="module" src="./catalog.mjs?v=30"></script>
 </body></html>
