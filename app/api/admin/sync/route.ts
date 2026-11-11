@@ -124,6 +124,13 @@ export async function POST(request: Request) {
     const songs = parseSongImport(text, format);
     processed = songs.length;
     const database = db();
+    // Count newly inserted slugs rather than presenting updates as new songs.
+    const placeholders = songs.map(() => '?').join(', ');
+    const previous = await database.prepare(
+      'SELECT slug FROM songs WHERE slug IN (' + placeholders + ')',
+    ).bind(...songs.map(song => song.slug)).all<{ slug: string }>();
+    const existing = new Set((previous.results || []).map(row => row.slug));
+    const inserted = songs.filter(song => !existing.has(song.slug)).length;
     // Verify R2 uploads exist before writing links or claiming sync success.
     for (const song of songs) {
       if (!song.sheet_key) continue;
@@ -151,7 +158,7 @@ export async function POST(request: Request) {
     const stats = await database.prepare('SELECT COUNT(*) AS total FROM songs')
       .first<{ total: number }>();
 
-    return json({ ok: true, processed, total_songs: Number(stats?.total ?? 0) });
+    return json({ ok: true, processed, inserted, total_songs: Number(stats?.total ?? 0) });
   } catch (error) {
     if (authenticated) {
       try {
