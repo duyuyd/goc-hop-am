@@ -23,6 +23,12 @@ if (root) {
       stats.textContent = data.total_songs === 0
         ? 'Đang chờ dữ liệu...'
         : 'Đã đồng bộ ' + data.total_songs.toLocaleString('vi-VN') + ' bài hát thực tế';
+      const homeTotal = document.getElementById('total');
+      const homeLabel = document.querySelector('.hero .stat-label');
+      if (homeTotal) homeTotal.textContent = data.total_songs === 0
+        ? 'Đang chờ dữ liệu...' : data.total_songs.toLocaleString('vi-VN');
+      if (homeLabel) homeLabel.textContent = data.total_songs === 0
+        ? '' : 'bài hát thực tế';
     } catch {
       stats.textContent = 'Lỗi kết nối thống kê D1.';
     }
