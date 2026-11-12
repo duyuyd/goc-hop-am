@@ -15,7 +15,17 @@ const approved = [
   {number: 122753041, title: 'Kinh Vinh Danh (Gloria)', author: 'Tom Mai', license: 'CC BY-SA 4.0', format: 'png'},
   {number: 122753045, title: 'Thánh Thánh Thánh (Sanctus)', author: 'Tom Mai', license: 'CC BY-SA 4.0', format: 'png'},
   {number: 177210573, title: 'Kinh Thương Xót trong Lễ Cầu Hồn', author: 'Tom Mai', license: 'CC BY 4.0', format: 'png'},
+  {number: 50421077, title: 'Không Màu', author: 'Thiết Kiện', license: 'CC BY-SA 4.0', format: 'jpg', genre: 'Nhạc Trẻ'},
+  {number: 69630175, title: 'Tình Hậu Giang', author: 'Hanhphucdoncoi', license: 'CC BY-SA 4.0', format: 'jpg', genre: 'Nhạc Trẻ'},
+  {number: 26581864, title: 'Những hạt giống mới', author: 'Tranhungdaohp', license: 'CC BY-SA 3.0', format: 'jpg', genre: 'Nhạc Học trò'},
 ];
+
+const mimeByFormat = {pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg'};
+const signatureByFormat = {
+  pdf: Buffer.from('%PDF-'),
+  png: Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+  jpg: Buffer.from([255, 216, 255]),
+};
 
 async function readSource(url, maximum) {
   const response = await fetch(url, {
@@ -35,11 +45,10 @@ async function readVietnameseScores() {
   const json = JSON.parse(new TextDecoder().decode(await readSource(request, 160000)));
   const files = new Map(json.query?.pages?.map(page => [page.pageid, page]));
   const result = [];
-  for (const {number, title, author, license, format, instrument} of approved) {
+  for (const {number, title, author, license, format, instrument, genre} of approved) {
     const entry = files.get(number);
     const info = entry?.imageinfo?.[0];
-    if (!info || info.extmetadata?.LicenseShortName?.value !== license ||
-        info.mime !== (format === 'pdf' ? 'application/pdf' : 'image/png')) {
+    if (!info || info.extmetadata?.LicenseShortName?.value !== license || info.mime !== mimeByFormat[format]) {
       throw new Error('Thông tin tệp hoặc giấy phép đã đổi ở Commons #' + number);
     }
     const url = new URL(info.url);
@@ -58,17 +67,18 @@ async function readVietnameseScores() {
       throw error;
     }) : null;
     const bytes = cached && createHash('sha1').update(cached).digest('hex') === info.sha1 ?
-      cached : await readSource(url, 1500000);
+      cached : await readSource(url, 2000000);
     const sha1 = createHash('sha1').update(bytes).digest('hex');
-    const signature = format === 'pdf' ? Buffer.from('%PDF-') : Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+    const signature = signatureByFormat[format];
     if (bytes.length !== info.size || (info.sha1 && sha1 !== info.sha1) ||
-        !Buffer.from(bytes.subarray(0, signature.length)).equals(signature)) {
+        !signature || !Buffer.from(bytes.subarray(0, signature.length)).equals(signature) ||
+        (format === 'jpg' && !Buffer.from(bytes.subarray(-2)).equals(Buffer.from([255, 217])))) {
       throw new Error('Tệp không khớp nguồn ở Commons #' + number);
     }
     const asset = 'files/' + id + '-' + sha1.slice(0, 10) + '.' + format;
     result.push({id, title, author, source: 'commons', sourceUrl: source.href,
-      instrument: instrument || (format === 'pdf' ? 'Giai điệu & lời' : 'Bình ca'),
-      format, license, licenseUrl: licenseUrl.href, asset, bytes});
+      instrument: instrument || (format === 'png' ? 'Bình ca' : 'Giai điệu & lời'),
+      format, genre, license, licenseUrl: licenseUrl.href, asset, bytes});
   }
   return result;
 }

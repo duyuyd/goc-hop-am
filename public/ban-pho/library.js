@@ -154,7 +154,7 @@ function render() {
     details.textContent = [score.author, score.opus, score.instrument].filter(Boolean).join(' · ');
     const badge = document.createElement('span');
     badge.className = 'badge';
-    badge.textContent = {pdf: 'PDF', mxl: 'MusicXML', png: 'Ảnh'}[score.format] || 'Bản phổ';
+    badge.textContent = {pdf: 'PDF', mxl: 'MusicXML', png: 'Ảnh', jpg: 'Ảnh'}[score.format] || 'Bản phổ';
     button.append(heading, details, badge);
     button.onclick = () => openScore(score);
     li.append(button);
@@ -172,7 +172,9 @@ function render() {
 function filter() {
   const words = normalize(search.value).split(' ').filter(Boolean);
   filtered = items.filter(score =>
-    (!collection.value || score.source === collection.value) && words.every(word => score.searchText.includes(word))
+    (!collection.value || (collection.value === 'nhac-tre' ? score.genre === 'Nhạc Trẻ' :
+      collection.value === 'commons' ? score.source === 'commons' && score.genre !== 'Nhạc Trẻ' : score.source === collection.value)) &&
+      words.every(word => score.searchText.includes(word))
   );
   page = 0;
   render();
@@ -193,10 +195,13 @@ async function load() {
     if (!response.ok) throw new Error('catalog_unavailable');
     const catalog = await response.json();
     items = catalog.items.map(score => ({
-      ...score, searchText: normalize([score.title, score.author, score.lyricist, score.opus, score.instrument].filter(Boolean).join(' ')),
+      ...score, searchText: normalize([score.title, score.author, score.lyricist, score.opus, score.instrument, score.genre].filter(Boolean).join(' ')),
     }));
     for (const option of collection.options) {
-      const count = option.value ? items.filter(score => score.source === option.value).length : items.length;
+      const count = !option.value ? items.length : option.value === 'nhac-tre' ?
+        items.filter(score => score.genre === 'Nhạc Trẻ').length : option.value === 'commons' ?
+          items.filter(score => score.source === 'commons' && score.genre !== 'Nhạc Trẻ').length :
+          items.filter(score => score.source === option.value).length;
       option.textContent += ' · ' + format(count);
     }
     const query = new URLSearchParams(location.search);
