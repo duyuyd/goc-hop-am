@@ -13,7 +13,7 @@ mir-eval==0.8.2
 pretty-midi==0.2.11
 resampy==0.4.2
 # resampy 0.4.2 imports pkg_resources, removed in setuptools 82.
-setuptools==80.9.0
+setuptools==84.1.0
 scikit-learn==1.8.0
 scipy==1.16.3
 typing-extensions==4.15.0
