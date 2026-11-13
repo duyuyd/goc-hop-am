@@ -1,0 +1,67 @@
+.page {
+  box-sizing: border-box;
+  margin: 2rem auto;
+  max-width: 62rem;
+  padding: 0 clamp(1rem, 4vw, 2.5rem) 3rem;
+  color: #2e2238;
+  font-family: system-ui, sans-serif;
+  line-height: 1.55;
+}
+
+.brand, .result a, .error a {
+  color: #633975;
+  text-underline-offset: 0.22em;
+}
+
+.page h1 {
+  margin: 1rem 0 0.3rem;
+  font-size: clamp(1.8rem, 5vw, 2.7rem);
+  line-height: 1.2;
+}
+
+.description, .help, .result span { color: #584e60; }
+
+.form {
+  padding: clamp(1rem, 3vw, 1.5rem);
+  border: 1px solid #ddcce4;
+  border-radius: 0.75rem;
+  background: #f8f2fa;
+}
+
+.fields {
+  display: grid;
+  justify-items: start;
+  gap: 0.55rem;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  min-inline-size: 0;
+}
+
+.fields label { font-weight: 600; }
+.fields input { max-width: 100%; font: inherit; }
+.fields input[type='number'] {
+  width: 6rem;
+  padding: 0.35rem;
+  border: 1px solid #9977aa;
+  border-radius: 0.35rem;
+}
+
+.fields button {
+  margin-top: 0.35rem;
+  padding: 0.65rem 1rem;
+  border: 0;
+  border-radius: 0.45rem;
+  background: #573367;
+  color: white;
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.fields button:disabled { opacity: 0.65; cursor: default; }
+.help { margin-bottom: 0; }
+.error { color: #8d2840; }
+.result { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; margin-bottom: 0.75rem; }
+.notation { overflow-x: auto; }
+.notation:not(:empty) { border: 1px solid #e6dcea; border-radius: 0.5rem; }

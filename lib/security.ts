@@ -11,7 +11,7 @@ export const protectionHeaders={
  'Referrer-Policy':'strict-origin-when-cross-origin',
  'Permissions-Policy':'camera=(), microphone=(), geolocation=()',
 };
-export async function boundedBytes(request:Request,maximum:number):Promise<Uint8Array<ArrayBuffer>>{
+export async function boundedBytes(request:Request|Response,maximum:number):Promise<Uint8Array<ArrayBuffer>>{
  if(Number(request.headers.get('content-length')||0)>maximum)throw new Error('body_too_large');
  if(!request.body)return new Uint8Array();
  const reader=request.body.getReader(),chunks:Uint8Array[]=[];let size=0;
