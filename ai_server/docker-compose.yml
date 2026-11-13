@@ -1,0 +1,7 @@
+services:
+  ai-server:
+    build: .
+    environment:
+      TRANSCRIBE_TOKEN: ${TRANSCRIBE_TOKEN:?Set TRANSCRIBE_TOKEN (32 or more URL-safe characters)}
+    ports:
+      - '127.0.0.1:8000:8000'
