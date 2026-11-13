@@ -12,6 +12,11 @@ type SongRow = {
   lyrics_text: string;
   has_pdf: number;
   pdf_url: string | null;
+  sheet_url: string | null;
+  sheet_mime: string | null;
+  sheet_license: string | null;
+  sheet_source_url: string | null;
+  sheet_credit: string | null;
   source_name: string;
   created_at: number;
 };
@@ -28,7 +33,8 @@ export async function GET(request: Request, context: { params: Promise<{ slug: s
 
     const song = await db()
       .prepare(`SELECT id, title, artist, slug, chords_text, lyrics_text,
-                       has_pdf, pdf_url, source_name, created_at
+                       has_pdf, pdf_url, sheet_url, sheet_mime,
+                       sheet_license, sheet_source_url, sheet_credit, source_name, created_at
                 FROM songs WHERE slug = ? LIMIT 1`)
       .bind(slug)
       .first<SongRow>();

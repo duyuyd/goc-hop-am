@@ -11,6 +11,8 @@ type SongListRow = {
   slug: string;
   has_pdf: number;
   pdf_url: string | null;
+  sheet_url: string | null;
+  sheet_mime: string | null;
   source_name: string;
   created_at: number;
 };
@@ -55,7 +57,7 @@ export async function GET(request: Request) {
       database.prepare(`SELECT COUNT(*) AS total FROM songs ${where}`)
         .bind(...binds).first<{ total: number }>(),
       database.prepare(`
-        SELECT id,title,artist,slug,has_pdf,pdf_url,source_name,created_at
+        SELECT id,title,artist,slug,has_pdf,pdf_url,sheet_url,sheet_mime,source_name,created_at
         FROM songs ${where}
         ORDER BY created_at DESC, slug ASC LIMIT ? OFFSET ?
       `).bind(...binds, limit, (page - 1) * limit).all<SongListRow>(),
@@ -72,7 +74,7 @@ export async function GET(request: Request) {
           .bind(...legacyBinds).first<{ total: number }>(),
         database.prepare(`
           SELECT id, title, author, author AS artist, genre, rhythm, key,
-                 NULL AS slug, 0 AS has_pdf, NULL AS pdf_url,
+                 NULL AS slug, 0 AS has_pdf, NULL AS pdf_url, NULL AS sheet_url, NULL AS sheet_mime,
                  'Bài cộng đồng' AS source_name, created_at
           FROM community_songs
           WHERE published = 1 ${legacyFilter}
