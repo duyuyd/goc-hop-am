@@ -11,7 +11,7 @@ const catalog = JSON.parse(readFileSync(resolve(root, 'public/ban-pho/catalog.js
 test('open score catalogue keeps unique records and verified local Commons files', () => {
   assert.equal(new Set(catalog.items.map(item => item.id)).size, catalog.items.length);
   const local = catalog.items.filter(item => item.source === 'commons');
-  assert.equal(local.length, 10);
+  assert.equal(local.length, 11);
   assert.equal(local.filter(item => item.genre === 'Nhạc Trẻ').length, 2);
   for (const item of local) {
     assert.match(item.license, /^(?:Public domain|CC BY(?:-SA)? [34]\.0)$/);

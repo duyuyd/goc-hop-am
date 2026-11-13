@@ -18,6 +18,7 @@ const approved = [
   {number: 50421077, title: 'Không Màu', author: 'Thiết Kiện', license: 'CC BY-SA 4.0', format: 'jpg', genre: 'Nhạc Trẻ'},
   {number: 69630175, title: 'Tình Hậu Giang', author: 'Hanhphucdoncoi', license: 'CC BY-SA 4.0', format: 'jpg', genre: 'Nhạc Trẻ'},
   {number: 26581864, title: 'Những hạt giống mới', author: 'Tranhungdaohp', license: 'CC BY-SA 3.0', format: 'jpg', genre: 'Nhạc Học trò'},
+  {number: 127247099, title: 'Cùng nhau ta đi lên', author: 'Phong Nhã', license: 'CC BY-SA 4.0', format: 'jpg', genre: 'Nhạc Thiếu nhi'},
 ];
 
 const mimeByFormat = {pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg'};
