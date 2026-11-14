@@ -1,6 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { AppError, failure, getAccount, json, rate, requireAccount, requireOrigin } from '../../../lib/accounts';
 import { boundedBytes, protectionHeaders } from '../../../lib/security';
+import { audioAuthorization } from '../../../lib/audio-signature.mjs';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,12 +12,14 @@ const CONTENT_TYPES = { mp3: 'audio/mpeg', wav: 'audio/wav' } as const;
 
 function configuration() {
   const token = env.AI_TRANSCRIBE_TOKEN || '';
-  if (!env.BUCKET || !/^[A-Za-z0-9_-]{32,128}$/.test(token)) return null;
+  const privateKeyValue = env.AI_TRANSCRIBE_PRIVATE_KEY || '';
+  const privateKey = /^[A-Za-z0-9_-]{64}$/.test(privateKeyValue) ? privateKeyValue : '';
+  if (!env.BUCKET || (!privateKey && !/^[A-Za-z0-9_-]{32,128}$/.test(token))) return null;
   try {
     const endpoint = new URL(env.AI_TRANSCRIBE_URL || '');
     if (endpoint.protocol !== 'https:' || endpoint.username || endpoint.password ||
         endpoint.pathname !== '/' || endpoint.search || endpoint.hash) return null;
-    return { bucket: env.BUCKET, endpoint: new URL('/transcribe', endpoint), token };
+    return { bucket: env.BUCKET, endpoint: new URL('/transcribe', endpoint), token, privateKey };
   } catch {
     return null;
   }
@@ -88,7 +91,7 @@ export async function POST(request: Request) {
         upstream = await fetch(config.endpoint, {
           method: 'POST',
           body: audio.body,
-          headers: { Authorization: `Bearer ${config.token}`, 'Content-Type': CONTENT_TYPES[format], Accept: MUSICXML },
+          headers: { Authorization: config.privateKey ? await audioAuthorization(config.privateKey, bpm) : `Bearer ${config.token}`, 'Content-Type': CONTENT_TYPES[format], Accept: MUSICXML },
           redirect: 'manual',
           signal: AbortSignal.timeout(100_000),
         });

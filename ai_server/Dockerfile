@@ -14,7 +14,7 @@ COPY requirements.txt .
 RUN python -m pip install --no-cache-dir -r requirements.txt \
     && python -m pip install --no-cache-dir --no-deps basic-pitch==0.4.0
 
-COPY main.py transcription.py ./ai_server/
+COPY main.py transcription.py auth.py ./ai_server/
 USER 10001:10001
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s \

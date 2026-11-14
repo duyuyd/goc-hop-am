@@ -1,8 +1,6 @@
 import asyncio
 import logging
 import os
-import re
-import secrets
 from contextlib import asynccontextmanager
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -15,6 +13,7 @@ from starlette.datastructures import UploadFile
 from starlette.formparsers import MultiPartException, MultiPartParser
 
 from .transcription import AudioError, load_model, transcribe
+from .auth import AuthVerifier
 
 MAX_UPLOAD = 36 * 1024 * 1024
 FORM_OVERHEAD = 64 * 1024
@@ -30,10 +29,7 @@ class UploadTooLarge(MultiPartException):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    token = os.environ.get('TRANSCRIBE_TOKEN', '')
-    if not re.fullmatch(r'[A-Za-z0-9_-]{32,128}', token):
-        raise RuntimeError('Set TRANSCRIBE_TOKEN to 32–128 URL-safe characters.')
-    app.state.token = token.encode('ascii')
+    app.state.auth = AuthVerifier.from_environment(os.environ)
     app.state.model = await run_in_threadpool(load_model)
     app.state.inference = asyncio.Lock()
     yield
@@ -108,8 +104,7 @@ async def health():
     },
 })
 async def create_score(request: Request, bpm: Annotated[int, Query(ge=40, le=240)] = 120):
-    scheme, _, supplied = request.headers.get('authorization', '').partition(' ')
-    if scheme.lower() != 'bearer' or not secrets.compare_digest(supplied.encode(), app.state.token):
+    if not app.state.auth.verify(request.headers.get('authorization', ''), bpm):
         raise HTTPException(401, 'Cần mã truy cập dịch vụ.', headers={'WWW-Authenticate': 'Bearer'})
     if app.state.inference.locked():
         raise HTTPException(503, 'Dịch vụ đang chép bản phổ khác. Hãy thử lại.', headers={'Retry-After': '5'})

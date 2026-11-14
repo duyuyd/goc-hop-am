@@ -6,6 +6,7 @@ declare namespace Cloudflare {
     BUCKET?: R2Bucket;
     AI_TRANSCRIBE_URL?: string;
     AI_TRANSCRIBE_TOKEN?: string;
+    AI_TRANSCRIBE_PRIVATE_KEY?: string;
     PUBLIC_SITE_ORIGIN?: string;
     GOOGLE_SITE_VERIFICATION?: string;
   }

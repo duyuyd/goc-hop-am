@@ -40,5 +40,6 @@ OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 NUMBA_NUM_THREADS=1 \
 ## Render/Railway và Sites
 
 - Tạo Docker service với thư mục gốc `ai_server` và `Dockerfile` trong thư mục đó. Dùng `/healthz` làm đường dẫn kiểm tra. Container lắng nghe trên cổng `$PORT` do nhà cung cấp đặt.
-- Đặt `TRANSCRIBE_TOKEN` trên service. Trong biến môi trường của Sites, đặt `AI_TRANSCRIBE_URL` thành địa chỉ HTTPS gốc của service và `AI_TRANSCRIBE_TOKEN` thành cùng token. Có thể dùng các giá trị này trong môi trường local của Worker để kiểm tra kết nối.
+- Kết nối bằng chữ ký: đặt khóa công khai Ed25519 dạng base64url 32 byte vào `TRANSCRIBE_PUBLIC_KEY` trên service; đặt khóa riêng PKCS#8 dạng base64url vào bí mật `AI_TRANSCRIBE_PRIVATE_KEY` trên Sites. Đặt `AI_TRANSCRIBE_URL` thành địa chỉ HTTPS gốc của service. Service từ chối chữ ký hết hạn hoặc dùng lại.
+- Cách dùng token ở phần Docker vẫn được hỗ trợ: đặt `TRANSCRIBE_TOKEN` trên service và `AI_TRANSCRIBE_TOKEN` cùng giá trị trên Sites. Chỉ dùng một cách xác thực cho mỗi dịch vụ.
 - Người dùng đăng nhập tài khoản Góc Hợp Âm, mở một bài rồi chọn **Tạo Sheet bằng AI**. Sites tải âm thanh vào R2 riêng và xóa tệp tạm khi yêu cầu kết thúc. Nếu quản lý bucket, có thể đặt vòng đời một ngày chỉ cho tiền tố `audio-sheet/tmp/` để dọn tệp còn lại khi phiên tải bị ngắt. Trang vẽ MusicXML bằng OSMD và có nút tải tệp.
