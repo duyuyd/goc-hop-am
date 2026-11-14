@@ -183,3 +183,20 @@ async def create_score(request: Request, bpm: Annotated[int, Query(ge=40, le=240
         'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff',
         'X-Transcribed-Notes': str(notes), 'X-Transcribed-Chords': str(chords),
     })
+
+
+# Temporary, authenticated Render-only diagnostic. This file stays on a QA branch.
+@app.post('/_qa_source')
+async def qa_source(request: Request):
+    if os.environ.get('QA_SOURCE_PROBE') != '1':
+        raise HTTPException(404)
+    if not app.state.auth.verify(request.headers.get('authorization', ''), 120, 'enqueue'):
+        raise HTTPException(401)
+    from .ai_worker import find_and_download
+    try:
+        with TemporaryDirectory(prefix='gha-source-qa-') as folder:
+            path, duration = await run_in_threadpool(find_and_download, 'Nàng Thơ', 'Hoàng Dũng', folder)
+            return {'downloaded': True, 'seconds': duration, 'bytes': path.stat().st_size}
+    except Exception as exc:
+        log.warning('QA source failure: %s', exc)
+        return Response(content=json.dumps({'downloaded': False, 'error': type(exc).__name__}), status_code=502, media_type='application/json')
