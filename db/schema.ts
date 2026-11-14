@@ -17,6 +17,13 @@ export const accountBookmarks = sqliteTable('account_bookmarks',{accountId:text(
 export const musicCache = sqliteTable('music_cache', {
  key:text('key').primaryKey(),payload:text('payload').notNull(),updatedAt:integer('updated_at').notNull()
 });
+export const aiJobs = sqliteTable('ai_jobs', {
+ id:text('id').primaryKey(), accountId:text('account_id').notNull().references(()=>accounts.id,{onDelete:'cascade'}),
+ songId:text('song_id').notNull(), title:text('title').notNull(), author:text('author').notNull(),
+ status:text('status').notNull().default('pending'), resultUrl:text('result_url'), resultKey:text('result_key'),
+ error:text('error'), createdAt:integer('created_at').notNull(), updatedAt:integer('updated_at').notNull(),
+ leaseUntil:integer('lease_until').notNull().default(0), attempts:integer('attempts').notNull().default(0)
+},table=>[uniqueIndex('one_active_ai_job').on(table.accountId,table.songId).where(sql`${table.status} in ('pending','processing')`)]);
 export const googleIdentities=sqliteTable('google_identities',{
  subject:text('subject').primaryKey(),accountId:text('account_id').notNull().references(()=>accounts.id,{onDelete:'cascade'}),email:text('email').notNull(),createdAt:integer('created_at').notNull()
 });
@@ -27,7 +34,6 @@ export const storeProducts=sqliteTable('store_products',{
 export const storeOrders=sqliteTable('store_orders',{
  id:text('id').primaryKey(),accountId:text('account_id').notNull().references(()=>accounts.id),productId:text('product_id').notNull().references(()=>storeProducts.id),title:text('title').notNull(),amountVnd:integer('amount_vnd').notNull(),status:text('status').notNull().default('pending'),paymentRef:text('payment_ref').notNull().default(''),buyerNote:text('buyer_note').notNull().default(''),adminNote:text('admin_note').notNull().default(''),reviewedBy:text('reviewed_by').references(()=>accounts.id),createdAt:integer('created_at').notNull(),updatedAt:integer('updated_at').notNull(),reviewedAt:integer('reviewed_at')
 },table=>[uniqueIndex('one_open_order').on(table.accountId,table.productId).where(sql`${table.status} in ('pending','review')`)]);
-
 /** Independently imported, verifiable song catalogue. Existing community_songs is preserved. */
 export const songs = sqliteTable('songs', {
   id: text('id').primaryKey(),

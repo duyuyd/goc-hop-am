@@ -7,6 +7,7 @@ import {createMusicTools} from './mobile/music-tools.js?v=145';
 import {createSongSheet} from './mobile/song-sheet.js?v=145';
 import {createStudio} from './mobile/studio.js?v=121';
 import {communitySongId,communitySongRef,songUrl as valid,songReferenceId,songReaderPath,validSong,parseOfflineSongs,offlineSongStorageKey,updateWebOfflineSong,findOfflineSongs} from './mobile/logic.js?v=142';
+import {createAutoSheet} from './auto-sheet.js';
 (() => {
 'use strict';
 const $=id=>document.getElementById(id),esc=s=>escapeText(decodeEntities(s??''));
@@ -24,6 +25,7 @@ $('reader-follow').onclick=()=>{followEnabled=!followEnabled;$('reader-follow').
 $('reader-lyrics').addEventListener('click',event=>{const row=event.target.closest('.lyric-line');if(row)rootFollow.select([...$('reader-lyrics').querySelectorAll('.lyric-line')].indexOf(row))});
 const musicTools=createMusicTools({toast:followStatus,getSong:()=>readerSong,getShift:()=>shift,onFindPdf(){if(readerSong)songSheet.open();else $('sheet-catalog').click()}});
 const songSheet=createSongSheet({host:$('reader-body'),getSong:()=>readerSong,getShift:()=>shift,toast:followStatus,onPlay(){rootFollow.stop();media.pause();stopScroll();musicTools.stop()},onShow(show){$('reader-lyrics').hidden=false;$('reader-sheet').setAttribute('aria-pressed',String(show));rootFollow.refresh()}});
+const autoSheet=createAutoSheet({button:$('reader-auto-sheet'),host:$('reader-body'),getSong:()=>readerSong?{...readerSong,sourceUrl:readerSong.sourceUrl||current?.url}:null});
 $('music-open').onclick=()=>musicTools.open();$('reader-make-sheet').onclick=()=>musicTools.open();$('reader-sheet').onclick=()=>songSheet.open();
 const studio=createStudio({native:false,call:async()=>true,toast:followStatus,beforeRecord(){}});
 $('reader-share').onclick=async()=>{if(!current?.url)return;const url=new URL('/',location.origin);url.searchParams.set('song',current.url);try{if(navigator.share)await navigator.share({title:readerSong?.title||current.title,text:'Cùng chơi bài này trên Góc Hợp Âm',url:url.href});else{await navigator.clipboard.writeText(url.href);followStatus('Đã sao chép liên kết bài hát.')}}catch(error){if(error.name!=='AbortError')followStatus('Chưa chia sẻ được. Hãy thử lại.')}};
@@ -106,7 +108,7 @@ function stopScroll(){clearInterval(scrollTimer);scrollTimer=null;$('reader-scro
 async function openSong(id,{force=false,listen=false}={}){
  const s=registry.get(id);if(!s||!valid(s.url))return;
  readerController?.abort();const ticket=++readerRequest;readerController=new AbortController();const signal=readerController.signal;
- stopScroll();current=s;readerSong=null;shift=0;hideChords=false;songSheet.setSong();
+ stopScroll();autoSheet.reset();current=s;readerSong=null;shift=0;hideChords=false;songSheet.setSong();
  media.setSong(s,{reset:true});
  $('songtitle').textContent=decodeEntities(s.title);$('songmeta').textContent=decodeEntities([s.author,s.singer].filter(Boolean).join(' · '));readerSaved();$('reader-notice').textContent='Đang tải lời và hợp âm…';$('reader-notice').classList.remove('error');$('reader-lyrics').textContent='';$('reader-credit').hidden=true;readerBusy(true);
  if(!$('reader').open)$('reader').showModal();$('reader-body').scrollTop=0;pathState();
@@ -128,7 +130,7 @@ async function openSong(id,{force=false,listen=false}={}){
  }catch(e){if(ticket!==readerRequest||e.name==='AbortError')return;if(savedSong){presentSong(savedSong,s);return}$('reader-notice').classList.add('error');$('reader-notice').innerHTML='<strong>Chưa tải được bài hát</strong><p>'+esc(e.message||'Vui lòng thử lại sau.')+'</p><button id="reader-retry">Thử lại</button>';readerBusy(true)}
 }
 function presentSong(song,summary=song){readerSong=song;readerSaved();songSheet.setSong();rootFollow.onSong(song);media.setSong({...summary,...song});$('songtitle').textContent=decodeEntities(song.title);$('songmeta').textContent=decodeEntities([song.author||summary.author,summary.singer,song.rhythm].filter(Boolean).join(' · '));$('reader-notice').textContent=song.offline?'Bản ngoại tuyến trên thiết bị.':song.stale?'Bản đã lưu ngày '+new Date(song.cachedAt).toLocaleDateString('vi-VN')+' · kết nối đang gián đoạn.':'';$('reader-notice').classList.remove('error');$('reader-credit').hidden=true;readerBusy(false);renderSong();if(followEnabled&&followVideo)rootFollow.videoReady()}
-window.addEventListener('library:open-local',e=>{const song=e.detail;if(!song||typeof song.content!=='string')return;readerController?.abort();++readerRequest;stopScroll();const ref=communitySongRef(song.id);current={...song,id:songReferenceId(ref)||song.id,url:ref,local:true};shift=0;hideChords=false;presentSong({...song,sourceUrl:ref},current);if(!$('reader').open)$('reader').showModal();$('reader-body').scrollTop=0});
+window.addEventListener('library:open-local',e=>{const song=e.detail;if(!song||typeof song.content!=='string')return;autoSheet.reset();readerController?.abort();++readerRequest;stopScroll();const ref=communitySongRef(song.id);current={...song,id:songReferenceId(ref)||song.id,url:ref,local:true};shift=0;hideChords=false;presentSong({...song,sourceUrl:ref},current);if(!$('reader').open)$('reader').showModal();$('reader-body').scrollTop=0});
 $('reader-up').onclick=()=>{shift++;renderSong()};$('reader-down').onclick=()=>{shift--;renderSong()};$('reader-reset').onclick=()=>{shift=0;renderSong()};
 $('reader-font-up').onclick=()=>{font=Math.min(40,font+2);applyFont()};$('reader-font-down').onclick=()=>{font=Math.max(14,font-2);applyFont()};$('reader-chords').onclick=()=>{hideChords=!hideChords;renderSong()};
 $('reader-font-reset').onclick=()=>{font=20;applyFont()};
@@ -138,7 +140,7 @@ function reset(){clearTimeout(typing);state={q:'',type:'title',genre:'',mode:'ho
 function search(){clearTimeout(typing);state.q=$('query').value.trim();state.genre='';if(state.mode!=='offline')state.mode=state.q?'search':'home';state.page=0;load({scroll:true})}
 $('search').onsubmit=e=>{e.preventDefault();search()};
 $('query').oninput=()=>{clearTimeout(typing);typing=setTimeout(()=>{const q=$('query').value.trim();if(q.length>=3||!q)search()},750)};
-$('close').onclick=()=>$('reader').close();$('reader').onclose=()=>{songSheet.stop();rootFollow.stop();readerController?.abort();++readerRequest;stopScroll();media.clear();setExpanded(false);if(ownsFullscreen&&document.fullscreenElement===document.documentElement)document.exitFullscreen?.().catch(()=>{});ownsFullscreen=false;readerSong=null;current=null;pathState()};$('reader-save').onclick=()=>{if(current)save(current.id)};
+$('close').onclick=()=>$('reader').close();$('reader').onclose=()=>{autoSheet.reset();songSheet.stop();rootFollow.stop();readerController?.abort();++readerRequest;stopScroll();media.clear();setExpanded(false);if(ownsFullscreen&&document.fullscreenElement===document.documentElement)document.exitFullscreen?.().catch(()=>{});ownsFullscreen=false;readerSong=null;current=null;pathState()};$('reader-save').onclick=()=>{if(current)save(current.id)};
 $('reader').addEventListener('click',e=>{if(e.target===$('reader'))$('reader').close()});
 $('theme').onclick=()=>{document.body.classList.toggle('light');try{localStorage.setItem('goc-theme',document.body.classList.contains('light')?'light':'dark')}catch{}};
 function setExpanded(on){$('reader').classList.toggle('is-expanded',on);$('reader-fullscreen').setAttribute('aria-pressed',String(on));$('reader-fullscreen').textContent=on?'⛶ Thu gọn':'⛶ Mở rộng lời';$('reader-fullscreen').setAttribute('aria-label',on?'Thu gọn khung lời bài hát':'Phóng to khung lời bài hát')}

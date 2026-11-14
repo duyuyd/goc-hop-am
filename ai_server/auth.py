@@ -29,7 +29,7 @@ class AuthVerifier:
             raise RuntimeError('Set TRANSCRIBE_PUBLIC_KEY or TRANSCRIBE_TOKEN.')
         return cls(token=token.encode('ascii'))
 
-    def verify(self, authorization: str, bpm: int) -> bool:
+    def verify(self, authorization: str, bpm: int, purpose: str = 'transcribe') -> bool:
         scheme, _, value = authorization.partition(' ')
         if self.public_key is None:
             return scheme.lower() == 'bearer' and secrets.compare_digest(value.encode(), self.token)
@@ -45,7 +45,9 @@ class AuthVerifier:
         self.seen = {key: expiry for key, expiry in self.seen.items() if expiry >= now}
         if nonce in self.seen or len(self.seen) >= 4096:
             return False
-        message = f'goc-hop-am:transcribe:v1:{issued}:{nonce}:{bpm}'.encode('ascii')
+        if purpose not in ('transcribe', 'enqueue'):
+            return False
+        message = f'goc-hop-am:{purpose}:v1:{issued}:{nonce}:{bpm}'.encode('ascii')
         try:
             self.public_key.verify(base64.urlsafe_b64decode(encoded + '=='), message)
         except (InvalidSignature, ValueError):

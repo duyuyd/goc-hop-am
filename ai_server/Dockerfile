@@ -1,5 +1,6 @@
 # syntax=docker/dockerfile:1
 FROM python:3.11-slim-bookworm
+COPY --from=node:22-bookworm-slim /usr/local/bin/node /usr/local/bin/node
 
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 \
     OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 NUMBA_NUM_THREADS=1 \
@@ -14,7 +15,7 @@ COPY requirements.txt .
 RUN python -m pip install --no-cache-dir -r requirements.txt \
     && python -m pip install --no-cache-dir --no-deps basic-pitch==0.4.0
 
-COPY main.py transcription.py auth.py ./ai_server/
+COPY main.py transcription.py auth.py ai_worker.py ./ai_server/
 USER 10001:10001
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s \
