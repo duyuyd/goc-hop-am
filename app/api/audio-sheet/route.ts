@@ -93,7 +93,7 @@ export async function POST(request: Request) {
           body: audio.body,
           headers: { Authorization: config.privateKey ? await audioAuthorization(config.privateKey, bpm) : `Bearer ${config.token}`, 'Content-Type': CONTENT_TYPES[format], Accept: MUSICXML },
           redirect: 'manual',
-          signal: AbortSignal.timeout(100_000),
+          signal: AbortSignal.timeout(240_000),
         });
       } catch (error) {
         if (error instanceof Error && error.name === 'TimeoutError') {

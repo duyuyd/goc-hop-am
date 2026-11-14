@@ -162,7 +162,7 @@ export function AudioUpload() {
         <button type="submit">Tạo bản phổ</button>
       </fieldset>
       {limits?.available && (limits.signedIn ? <p className={styles.help}>
-        Tối đa {limits.maxSeconds} giây và {limits.maxBytes / (1024 * 1024)} MiB. Chọn BPM của bản thu để đặt ô nhịp chính xác hơn.
+        Tối đa {limits.maxSeconds} giây và {limits.maxBytes / (1024 * 1024)} MiB. Chọn BPM của bản thu để đặt ô nhịp chính xác hơn. Lần xử lý đầu có thể mất vài phút.
       </p> : <p><a href="/dang-nhap">Đăng nhập</a> để tải âm thanh lên.</p>)}
       {configFailed && <p role="alert">Chưa kiểm tra được dịch vụ. Hãy tải lại trang.</p>}
       {!pending && limits && !limits.available && <p role="status">Tính năng đang chờ kết nối dịch vụ chép bản phổ.</p>}
