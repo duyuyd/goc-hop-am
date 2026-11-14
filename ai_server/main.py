@@ -1,6 +1,8 @@
 import asyncio
 import logging
+import json
 import os
+import re
 from contextlib import asynccontextmanager
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -14,6 +16,7 @@ from starlette.formparsers import MultiPartException, MultiPartParser
 
 from .transcription import AudioError, load_model, transcribe
 from .auth import AuthVerifier
+from .ai_worker import run_job
 
 MAX_UPLOAD = 36 * 1024 * 1024
 FORM_OVERHEAD = 64 * 1024
@@ -32,7 +35,24 @@ async def lifespan(app: FastAPI):
     app.state.auth = AuthVerifier.from_environment(os.environ)
     app.state.model = await run_in_threadpool(load_model)
     app.state.inference = asyncio.Lock()
-    yield
+    app.state.queue = asyncio.Queue(maxsize=3)
+    app.state.queued = set()
+    async def consume():
+        while True:
+            job = await app.state.queue.get()
+            try:
+                async with app.state.inference:
+                    await run_in_threadpool(run_job, job, app.state.model)
+            except Exception:
+                log.exception('Background score job failed')
+            finally:
+                app.state.queued.discard(job['id'])
+                app.state.queue.task_done()
+    task = asyncio.create_task(consume())
+    try:
+        yield
+    finally:
+        task.cancel()
 
 
 app = FastAPI(title='Góc Hợp Âm · Audio Transcription', lifespan=lifespan)
@@ -88,6 +108,34 @@ async def save_audio(request: Request, destination: Path) -> None:
 @app.get('/healthz')
 async def health():
     return {'status': 'ready'}
+
+
+@app.post('/jobs', status_code=202)
+async def enqueue_job(request: Request):
+    if not app.state.auth.verify(request.headers.get('authorization', ''), 120, 'enqueue'):
+        raise HTTPException(401, 'Cần mã truy cập dịch vụ.')
+    raw = bytearray()
+    async for chunk in request.stream():
+        raw.extend(chunk)
+        if len(raw) > 4096:
+            raise HTTPException(413, 'Thông tin công việc quá lớn.')
+    try:
+        job = json.loads(raw)
+    except (ValueError, UnicodeDecodeError):
+        raise HTTPException(400, 'Thông tin công việc không hợp lệ.')
+    if not isinstance(job, dict) or not re.fullmatch(r'[0-9a-f-]{36}', str(job.get('id', ''))) or \
+       not isinstance(job.get('title'), str) or not 1 <= len(job['title']) <= 180 or \
+       not isinstance(job.get('author'), str) or len(job['author']) > 120 or \
+       job.get('callback_origin') != 'https://goc-hop-am.onwardcrust.chatgpt.site' or \
+       not re.fullmatch(r'[A-Za-z0-9_-]{43}', str(job.get('callback_token', ''))):
+        raise HTTPException(400, 'Thông tin công việc không hợp lệ.')
+    if job['id'] not in app.state.queued:
+        try:
+            app.state.queue.put_nowait(job)
+        except asyncio.QueueFull:
+            raise HTTPException(503, 'Dịch vụ đang xử lý. Hãy thử lại.')
+        app.state.queued.add(job['id'])
+    return {'status': 'queued'}
 
 
 @app.post('/transcribe', response_class=Response, responses={200: {'content': {MUSICXML: {}}}}, openapi_extra={
