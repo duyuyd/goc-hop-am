@@ -25,6 +25,7 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: |
           node tests/imported-song-logic.test.mjs
+          node tests/imported-song-reader.test.mjs
           node tests/catalog.test.mjs
           node tests/reader.test.mjs
 
