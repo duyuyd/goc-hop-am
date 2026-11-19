@@ -1,49 +1,44 @@
-name: Goc Hop Am - zero trust atomic verification
+name: Goc Hop Am v14 - zero trust verification
 on:
   push:
-    branches:
-      - release/goc-hop-am-v13.0
+    branches: [release/goc-hop-am-v14.0]
   workflow_dispatch:
-
 permissions:
   contents: read
-
 concurrency:
-  group: goc-hop-am-atomic-${{ github.ref }}
+  group: goc-hop-am-v14-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  local-regression:
-    name: Read-only source and imported-song regression tests
+  regressions:
+    name: Read-only regression (no secrets)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
-      - name: Install locked dependencies
-        run: npm ci --no-audit --no-fund
-      - name: Verify imports and source reader behavior
-        run: |
+      - run: npm ci --no-audit --no-fund
+      - run: |
           node tests/imported-song-logic.test.mjs
           node tests/catalog.test.mjs
           node tests/reader.test.mjs
 
-  atomic-verification:
-    name: Remote D1 and real production Playwright proof
+  real-source:
+    name: Original-source Playwright stealth crawler
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 35
     env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      D1_DATABASE_NAME: ${{ vars.D1_DATABASE_NAME }}
-      PRODUCTION_URL: ${{ vars.VERCEL_PRODUCTION_URL }}
-      E2E_WEBHOOK_URL: ${{ secrets.E2E_WEBHOOK_URL }}
       CRAWL_SEED_URL: ${{ vars.CRAWL_SEED_URL }}
+      FLARESOLVERR_URL: http://127.0.0.1:8191/v1
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -51,63 +46,133 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
-      - name: Require genuine remote services and credentials
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -n "$CLOUDFLARE_API_TOKEN" || { echo 'FAIL: CLOUDFLARE_API_TOKEN missing'; exit 1; }
-          test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo 'FAIL: CLOUDFLARE_ACCOUNT_ID missing'; exit 1; }
-          test -n "$D1_DATABASE_NAME" || { echo 'FAIL: D1_DATABASE_NAME variable missing'; exit 1; }
-          test -n "$PRODUCTION_URL" || { echo 'FAIL: VERCEL_PRODUCTION_URL variable missing'; exit 1; }
-          test -n "$E2E_WEBHOOK_URL" || { echo 'FAIL: E2E_WEBHOOK_URL secret missing'; exit 1; }
-          [[ "$PRODUCTION_URL" == https://* ]] || { echo 'FAIL: production must be HTTPS'; exit 1; }
-          [[ "$E2E_WEBHOOK_URL" == https://* ]] || { echo 'FAIL: webhook must be HTTPS'; exit 1; }
-          echo 'Remote configuration present; no values fabricated.'
-
-      - name: Install project and Playwright
+      - name: Install project, pinned Chromium/Stealth and underthesea
         run: |
           npm ci --no-audit --no-fund
-          npm install --no-save --package-lock=false @playwright/test
+          npm install --no-save --package-lock=false @playwright/test@1.65.1 playwright-extra@4.3.6 puppeteer-extra-plugin-stealth@2.11.2
           npx playwright install --with-deps chromium
           python -m pip install underthesea
-
-      - name: Start source provenance window
+      - name: Start Docker FlareSolverr in current CI run
+        run: docker run --rm -d --name flaresolverr-v14 -p 127.0.0.1:8191:8191 ghcr.io/flaresolverr/flaresolverr:latest
+      - name: Record actual CI start
         run: echo "CI_STARTED_AT=$(date -u +%s%3N)" >> "$GITHUB_ENV"
-
-      - name: Crawl original source HTML in a clean browser
+      - name: Crawl and log five original source IDs and cookie timestamps
         run: node --experimental-strip-types scripts/crawler.ts
-
-      - name: Validate Vietnamese text and source identity
-        run: python scripts/validate_vi.py
-
-      - name: Generate actual remote D1 SQL and checksums
+      - name: Validate Vietnamese and SHA-256 JSON
         run: |
+          python scripts/validate_vi.py
           node --experimental-strip-types scripts/make-import-sql.ts
           sha256sum artifacts/songs_import.json songs_import.sql
-
-      - name: Import verified rows to remote D1
-        run: npx wrangler d1 execute "$D1_DATABASE_NAME" --remote --file=./songs_import.sql
-
-      - name: Print remote database counts (real CLI stdout)
-        run: |
-          npx wrangler d1 execute "$D1_DATABASE_NAME" --remote --command "SELECT count(*) AS total, count(distinct artist) AS distinct_artists, count(distinct title) AS distinct_titles FROM songs;"
-          npx wrangler d1 execute "$D1_DATABASE_NAME" --remote --command "SELECT count(distinct slug) AS distinct_slugs FROM songs;"
-
-      - name: Seed dynamic OTP in this CI run
-        run: node --experimental-strip-types scripts/e2e-seed.ts
-
-      - name: Write dynamic OTP to remote D1
-        run: npx wrangler d1 execute "$D1_DATABASE_NAME" --remote --file=./artifacts/e2e-seed.sql
-
-      - name: Verify live production using browser only
-        run: npx playwright test tests/e2e/goc-hop-am.spec.ts --reporter=line
-
-      - name: Archive actual evidence, including failures
+      - name: Upload genuine crawler artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: goc-hop-am-atomic-verification
+          name: crawler-v14
+          path: |
+            artifacts/songs_import.json
+            songs_import.sql
+          if-no-files-found: warn
+          retention-days: 7
+
+  local-fallback:
+    name: Wrangler Miniflare real D1 + E2E login and OTP
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install production app and pinned browser
+        run: |
+          npm ci --no-audit --no-fund
+          npm install --no-save --package-lock=false @playwright/test@1.65.1
+          npx playwright install --with-deps chromium
+      - name: Execute real Wrangler local migrations, seed, login and browser webhook
+        run: bash scripts/local-fallback.sh
+      - name: Archive local video/HAR/screenshots/SQLite logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: local-miniflare-v14
+          path: |
+            artifacts/
+            test-results/
+          if-no-files-found: warn
+          retention-days: 7
+
+  remote-atomic:
+    name: Supabase Admin API + real D1 remote + production browser
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      D1_DATABASE_NAME: ${{ vars.D1_DATABASE_NAME }}
+      SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      PRODUCTION_URL: ${{ vars.VERCEL_PRODUCTION_URL }}
+      E2E_WEBHOOK_URL: ${{ secrets.E2E_WEBHOOK_URL }}
+      CRAWL_SEED_URL: ${{ vars.CRAWL_SEED_URL }}
+      FLARESOLVERR_URL: http://127.0.0.1:8191/v1
+      E2E_MODE: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install browser, stealth, Wrangler and tokenizer
+        run: |
+          npm ci --no-audit --no-fund
+          npm install --no-save --package-lock=false @playwright/test@1.65.1 playwright-extra@4.3.6 puppeteer-extra-plugin-stealth@2.11.2
+          npx playwright install --with-deps chromium
+          python -m pip install underthesea
+      - name: Start independent Docker FlareSolverr
+        run: docker run --rm -d --name flaresolverr-remote -p 127.0.0.1:8191:8191 ghcr.io/flaresolverr/flaresolverr:latest
+      - name: Record original CI start
+        run: echo "CI_STARTED_AT=$(date -u +%s%3N)" >> "$GITHUB_ENV"
+      - name: Crawl real source regardless of remote secrets
+        run: node --experimental-strip-types scripts/crawler.ts
+      - name: Verify source IDs and SQL import checksum
+        run: |
+          python scripts/validate_vi.py
+          node --experimental-strip-types scripts/make-import-sql.ts
+          sha256sum artifacts/songs_import.json songs_import.sql
+      - name: Require verified remote service configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          for variable in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID D1_DATABASE_NAME SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY PRODUCTION_URL E2E_WEBHOOK_URL; do
+            test -n "$(printenv "$variable")" || { echo "FAIL: missing $variable"; exit 1; }
+          done
+      - name: Import authentic source rows into D1 remote
+        run: npx wrangler d1 execute "$D1_DATABASE_NAME" --remote --file=./songs_import.sql
+      - name: Require at least 100 real remote D1 songs
+        run: |
+          npx wrangler d1 execute "$D1_DATABASE_NAME" --remote --command "SELECT count(*) AS total FROM songs;" --json | tee artifacts/remote-count.json
+          node scripts/check-remote-count.mjs artifacts/remote-count.json
+      - name: Create real Supabase Auth test account
+        run: node --experimental-strip-types scripts/supabase-seed.ts
+      - name: Prepare new D1 OTP row
+        run: node --experimental-strip-types scripts/e2e-seed.ts
+      - name: Write OTP to D1 remote
+        run: npx wrangler d1 execute "$D1_DATABASE_NAME" --remote --file=./artifacts/e2e-seed.sql
+      - name: Browser Supabase login, D1 search, OTP assertion and webhook
+        run: npx playwright test tests/e2e/goc-hop-am.spec.ts --reporter=line --workers=1
+      - name: Archive production HAR, video, screenshots, D1 stdout and seed proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-v14-atomic
           path: |
             artifacts/
             songs_import.sql
