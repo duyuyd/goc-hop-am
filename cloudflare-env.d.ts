@@ -1,6 +1,8 @@
 declare namespace Cloudflare {
   interface Env {
     DB?: D1Database;
+    SUPABASE_URL?: string;
+    SUPABASE_ANON_KEY?: string;
     ADMIN_USERNAME?: string;
     ADMIN_PASSWORD_HASH?: string;
     BUCKET?: R2Bucket;
