@@ -13,6 +13,24 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  local-regression:
+    name: Read-only source and imported-song regression tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Verify imports and source reader behavior
+        run: |
+          node tests/imported-song-logic.test.mjs
+          node tests/catalog.test.mjs
+          node tests/reader.test.mjs
+
   atomic-verification:
     name: Remote D1 and real production Playwright proof
     runs-on: ubuntu-latest
