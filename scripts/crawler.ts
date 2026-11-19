@@ -107,4 +107,16 @@ try {
   console.log('songs_import.json sha256=' + createHash('sha256').update(bytes).digest('hex'));
   console.log('five_source_ids=' + recorded.slice(0, 5).map(x => x.source_id).join(','));
   if (recorded.length < 5) throw new Error('FAIL: fewer than five validated original source IDs');
+} catch (error) {
+  const explanation = error instanceof Error ? error.message : 'unknown';
+  await writeFile('artifacts/crawler-failure.json', JSON.stringify({
+    status: 'FAIL', original_origin: ROOT,
+    captured_source_ids: recorded.map(song => song.source_id),
+    source_count: recorded.length, reason: explanation,
+    cf_clearance_present: Boolean(observed),
+    cf_clearance_first_seen: observed?.firstSeen || null,
+    cf_clearance_sha256: observed?.sha256 || null,
+    ci_started_at: CI_STARTED_AT,
+  }, null, 2) + '\n');
+  throw error;
 } finally { await context.close(); await browser.close(); }
