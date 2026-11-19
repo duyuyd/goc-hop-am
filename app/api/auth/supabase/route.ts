@@ -9,10 +9,10 @@ export async function POST(request: Request) {
   const input = await body(request);
   const email = typeof input.email === 'string' ? input.email.trim().toLowerCase() : '';
   const password = typeof input.password === 'string' ? input.password : '';
-  if (!/^[^@\\s]+@[^@\\s]+\\.[a-z]{2,}$/.test(email) || email.length > 254 || password.length < 8 || password.length > 128)
+  if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/.test(email) || email.length > 254 || password.length < 8 || password.length > 128)
    throw new AppError(400, 'Thông tin đăng nhập không hợp lệ.');
   await rate(request, 'supabase:login:' + email, 10);
-  const origin = String(env.SUPABASE_URL || '').replace(/\\/+$/, '');
+  const origin = String(env.SUPABASE_URL || '').replace(/\/+$/, '');
   const anon = String(env.SUPABASE_ANON_KEY || '');
   if (!origin.startsWith('https://') || !anon) throw new AppError(503, 'Supabase chưa cấu hình.');
   const response = await fetch(origin + '/auth/v1/token?grant_type=password', {
