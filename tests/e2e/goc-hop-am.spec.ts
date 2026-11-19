@@ -40,8 +40,8 @@ test('remote D1 OTP -> production UI -> browser webhook -> two-origin HAR', asyn
     const result = page.locator('#results button.open').filter({ hasText: slug });
     await expect(result.first()).toBeVisible({ timeout: 30000 });
     await result.first().click();
-    await expect(page.locator('#reader-lyrics')).toContainText(otp, { timeout: 30000 });
     await page.waitForTimeout(3000);
+    await expect(page.locator('#reader-lyrics')).toContainText(otp, { timeout: 30000 });
     verifiedOtp = true;
 
     // MUST execute inside the real browser immediately after the UI OTP assertion.
