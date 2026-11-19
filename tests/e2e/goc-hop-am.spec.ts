@@ -34,7 +34,7 @@ test('remote D1 OTP -> production UI -> browser webhook -> two-origin HAR', asyn
     // Don't synthesize headers. Exact values must come from Playwright network response.
     expect(navigation?.headers()['x-vercel-id'], 'Real x-vercel-id required').toBeTruthy();
     await expect(page.locator('#d1-song-count')).toContainText('Đã cập nhật');
-    await page.getByRole('searchbox', { name: 'Tìm trong toàn kho' }).fill(slug);
+    await page.locator('#query').fill(slug);
     await page.locator('#search button[type="submit"]').click();
     const result = page.locator('#results button.open').filter({ hasText: slug });
     await expect(result.first()).toBeVisible({ timeout: 30000 });
