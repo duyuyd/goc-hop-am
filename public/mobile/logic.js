@@ -5,11 +5,13 @@ export function transpose(chord,shift=0){
  return String(chord).replace(/(^|\/)([A-G][#b]?)/g,(_,prefix,note)=>prefix+(note.includes('b')?flats:sharps)[(((aliases[note]??sharps.indexOf(note))+shift)%12+12)%12]);
 }
 const communityPrefix='goc-song:';
+const importedPrefix='goc-import:';
+export function importedSongId(value){const slug=typeof value==='string'&&value.startsWith(importedPrefix)?value.slice(importedPrefix.length):'';return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)&&slug.length<=160?slug:null;}
 export function communitySongRef(id){return typeof id==='string'&&/^[A-Za-z0-9_-]{1,80}$/.test(id)?communityPrefix+id:null}
 export function communitySongId(value){return typeof value==='string'&&value.startsWith(communityPrefix)&&communitySongRef(value.slice(communityPrefix.length))===value?value.slice(communityPrefix.length):null}
-export function songUrl(value){if(communitySongId(value))return value;try{const u=new URL(value);return u.origin==='https://hopamviet.vn'&&!u.username&&!u.password&&/^\/chord\/song\/[a-z0-9-]+\/[A-Za-z0-9]+\.html$/.test(u.pathname)?u.origin+u.pathname:null}catch{return null}}
-export function songReferenceId(value){const ref=songUrl(value),id=communitySongId(ref);return ref&&(id?'goc-'+id:ref.split('/').at(-1).slice(0,-5))}
-export function songReaderPath(value){const ref=songUrl(value);if(!ref)return null;const id=communitySongId(ref);return '/api/reader?'+new URLSearchParams(id?{id}:{url:ref})}
+export function songUrl(value){if(communitySongId(value)||importedSongId(value))return value;try{const u=new URL(value);return u.origin==='https://hopamviet.vn'&&!u.username&&!u.password&&/^\/chord\/song\/[a-z0-9-]+\/[A-Za-z0-9]+\.html$/.test(u.pathname)?u.origin+u.pathname:null}catch{return null}}
+export function songReferenceId(value){const ref=songUrl(value),id=communitySongId(ref),slug=importedSongId(ref);return ref&&(slug?'goc-import-'+slug:id?'goc-'+id:ref.split('/').at(-1).slice(0,-5))}
+export function songReaderPath(value){const ref=songUrl(value);if(!ref)return null;const id=communitySongId(ref),imported=importedSongId(ref);return '/api/reader?'+new URLSearchParams(imported?{imported}:id?{id}:{url:ref})}
 export function validSong(s){return !!s&&typeof s.title==='string'&&s.title.length>0&&s.title.length<400&&typeof s.content==='string'&&s.content.length>0&&s.content.length<=80000&&!!songUrl(s.sourceUrl)}
 
 export function songSearchKey(value){return String(value??'').normalize('NFD').replace(/\p{M}/gu,'').replace(/[đĐ]/g,'d').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim()}
