@@ -20,7 +20,7 @@ echo "Actual Miniflare D1 local count:"
 npx wrangler d1 execute "$DB" --local --config="$CONFIG" --persist-to="$PERSIST" --command="SELECT count(*) AS total FROM songs;"
 
 npm run build
-npm start > artifacts/wrangler-local.log 2>&1 &
+npx --yes wrangler@4.165.0 dev --config=dist/server/wrangler.json --local --persist-to=.wrangler/state --ip=127.0.0.1 --inspector-port=0 > artifacts/wrangler-local.log 2>&1 &
 app_pid=$!
 export PRODUCTION_URL=http://127.0.0.1:8787
 export E2E_WEBHOOK_URL=http://127.0.0.1:7071/receipt
