@@ -28,6 +28,7 @@ test('remote D1 OTP -> production UI -> browser webhook -> two-origin HAR', asyn
   });
   const page = await context.newPage();
   let verifiedOtp = false;
+  let originalHarHash = '';
   try {
     const navigation = await page.goto(liveUrl.href, { waitUntil: 'domcontentloaded', timeout: 45000 });
     expect(navigation?.ok(), 'Production must respond successfully').toBeTruthy();
@@ -65,10 +66,29 @@ test('remote D1 OTP -> production UI -> browser webhook -> two-origin HAR', asyn
     try { await page.screenshot({ path: 'artifacts/production.png', fullPage: true }); }
     catch (error) { console.warn('Screenshot capture failed:', error); }
     await context.close(); // Necessary to flush network.har and video to disk.
+    // Redact cookies on both PASS and FAIL before GitHub uploads artifacts.
+    try {
+      const raw = await readFile('artifacts/network.har', 'utf8');
+      originalHarHash = createHash('sha256').update(raw).digest('hex');
+      const recorded = JSON.parse(raw);
+      for (const entry of recorded.log?.entries || []) {
+        entry.request.headers = (entry.request.headers || []).filter((h: any) =>
+          !['cookie', 'authorization', 'x-api-key'].includes(h.name.toLowerCase()));
+        entry.response.headers = (entry.response.headers || []).filter((h: any) =>
+          !['set-cookie', 'authorization'].includes(h.name.toLowerCase()));
+        entry.request.cookies = [];
+        entry.response.cookies = [];
+      }
+      await writeFile('artifacts/network.har', JSON.stringify(recorded, null, 2) + '\n');
+    } catch (error) {
+      // Never upload a potentially unredacted browser archive after a parser error.
+      await writeFile('artifacts/network.har', '{"log":{"entries":[]}}');
+      console.error('HAR sanitization failed; discarded raw recording:', error);
+    }
   }
   if (!verifiedOtp) throw new Error('FAIL: OTP assertion did not complete');
-  const originalHar = await readFile('artifacts/network.har', 'utf8');
-  const har = JSON.parse(originalHar);
+  const publicHar = await readFile('artifacts/network.har', 'utf8');
+  const har = JSON.parse(publicHar);
   const entries = har.log?.entries || [];
   const fromOrigin = (origin: string) => entries.filter((entry: any) => {
     try { return new URL(entry.request.url).origin === origin; } catch { return false; }
@@ -90,22 +110,11 @@ test('remote D1 OTP -> production UI -> browser webhook -> two-origin HAR', asyn
   expect(sourceId, 'FAIL: HAR missing source origin request ID').toBeTruthy();
   expect(sentWebhook, 'FAIL: HAR missing browser-originated webhook POST').toBe(true);
 
-  // Remove credentials only; preserve original network headers and evidence IDs.
-  for (const entry of entries) {
-    entry.request.headers = entry.request.headers?.filter((h: any) =>
-      !['cookie', 'authorization', 'x-api-key'].includes(h.name.toLowerCase())) || [];
-    entry.response.headers = entry.response.headers?.filter((h: any) =>
-      !['set-cookie', 'authorization'].includes(h.name.toLowerCase())) || [];
-    entry.request.cookies = [];
-    entry.response.cookies = [];
-  }
-  const publicHar = JSON.stringify(har, null, 2) + '\n';
-  await writeFile('artifacts/network.har', publicHar);
   await writeFile('artifacts/atomic-proof.json', JSON.stringify({
     slug, otp, production_origin: liveUrl.origin,
     vercel_id: vercelId, source_request_id: sourceId,
     webhook_post_from_browser: sentWebhook,
-    original_har_sha256: createHash('sha256').update(originalHar).digest('hex'),
+    original_har_sha256: originalHarHash,
     redacted_har_sha256: createHash('sha256').update(publicHar).digest('hex'),
     assertion: 'OTP observed in rendered production reader before browser fetch',
   }, null, 2) + '\n');
