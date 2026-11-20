@@ -1,7 +1,7 @@
 name: Guardian - OpenSSF supply chain scorecard
 on:
   push:
-    branches: [main, feat/github-guardian-platform]
+    branches: [main]
   schedule:
     - cron: '31 3 * * 1'
   workflow_dispatch:
