@@ -1,0 +1,56 @@
+name: Capacitor APK on v* tag
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  android-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: capacitor-wrapper/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - name: Install Capacitor
+        working-directory: capacitor-wrapper
+        run: npm install --no-audit --no-fund
+      - name: Generate Android project
+        working-directory: capacitor-wrapper
+        run: |
+          npx cap add android
+          npx cap sync android
+      - name: Build debug APK
+        working-directory: capacitor-wrapper/android
+        run: ./gradlew assembleDebug --no-daemon
+      - name: Verify APK payload
+        run: |
+          test -f capacitor-wrapper/android/app/build/outputs/apk/debug/app-debug.apk
+          size=$(stat -c%s capacitor-wrapper/android/app/build/outputs/apk/debug/app-debug.apk)
+          echo "APK bytes: $size"
+          test "$size" -gt 5242880
+      - uses: actions/upload-artifact@v4
+        with:
+          name: goc-hop-am-capacitor-debug-apk
+          path: capacitor-wrapper/android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
+      - name: Create or update GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --title "Góc Hợp Âm $TAG" --notes "Hybrid Android debug APK (Capacitor); requires an internet connection."
+          fi
+          gh release upload "$TAG" capacitor-wrapper/android/app/build/outputs/apk/debug/app-debug.apk --clobber
