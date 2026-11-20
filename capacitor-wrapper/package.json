@@ -1,0 +1,17 @@
+{
+  "name": "goc-hop-am-hybrid",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "android": "cap sync android"
+  },
+  "dependencies": {
+    "@capacitor/core": "8.6.2",
+    "@capacitor/android": "8.6.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.6.2",
+    "typescript": "^5.9.3"
+  }
+}

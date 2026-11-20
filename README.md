@@ -29,3 +29,7 @@ Migrations are schema-only under `drizzle/`. Production publication applies the 
 ## Recording and video follow
 
 The home page and mobile UI expose user-started recording. Browser media permissions are scoped to the current origin; unsupported display capture is explained before starting. Android uses a native microphone/screen service and a Camera2 front-camera recorder. YouTube lyric following aligns public captions to lyrics against the actual video clock, without microphone input; videos without matching captions require LRC or user-marked cues. Original project credit: NPT Duy, see COPYRIGHT.md.
+
+## Android APK / Puter.js (standardization PR)
+
+This repository remains **Góc Hợp Âm**, not NuvoraCraft. The existing Sites project and stored songs are untouched. The remote Capacitor app loads https://goc-hop-am.onwardcrust.chatgpt.site; offline sheet previews come from the existing `public/ban-pho/files/` and are packaged without fabricating notation. The public, installable **pre-release** tag is `v2.0.0-android-rc48` after CI completes; do not use draft release links. Puter.js is loaded by both the Next layout and the separate HTML route, preserving the existing song reader. Changes are on the feature branch only, **not on main** until Founder comments `VERIFIED`.
