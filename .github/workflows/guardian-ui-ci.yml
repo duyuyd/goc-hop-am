@@ -1,0 +1,27 @@
+name: Guardian - Music website UI typecheck
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'components/**'
+      - 'lib/**'
+      - '.github/workflows/guardian-ui-ci.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install exact project dependencies
+        run: npm run install:ci
+      - name: TypeScript strict verification for the existing music website
+        run: ./node_modules/.bin/tsc --noEmit
