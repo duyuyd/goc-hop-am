@@ -29,3 +29,7 @@ Migrations are schema-only under `drizzle/`. Production publication applies the 
 ## Recording and video follow
 
 The home page and mobile UI expose user-started recording. Browser media permissions are scoped to the current origin; unsupported display capture is explained before starting. Android uses a native microphone/screen service and a Camera2 front-camera recorder. YouTube lyric following aligns public captions to lyrics against the actual video clock, without microphone input; videos without matching captions require LRC or user-marked cues. Original project credit: NPT Duy, see COPYRIGHT.md.
+
+## GitHub Guardian — DevSecOps & real production audits
+
+The project has security, supply-chain and live-site checks through GitHub Actions. The implementation and **measured** Lighthouse baseline are documented in [GitHub Guardian](docs/GITHUB_GUARDIAN.md). No workflow automatically merges, deploys, alters customer data or changes mobile signing keys.
