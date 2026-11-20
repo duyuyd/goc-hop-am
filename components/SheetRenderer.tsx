@@ -2,8 +2,8 @@
 import {useEffect,useMemo,useRef,useState} from "react";
 
 type SheetRendererProps={chord:string;lyrics:string;title?:string};
-const chordToken=/\\[([A-G](?:#|b)?(?:m|maj|min|dim|aug|sus|add)?[0-9+#b/()a-zA-Z-]*)\\]/g;
-const safeChord=/^[A-G](?:#|b)?[a-zA-Z0-9+#b/()\\-]{0,24}$/;
+const chordToken=/\[([A-G](?:#|b)?(?:m|maj|min|dim|aug|sus|add)?[0-9+#b/()a-zA-Z-]*)\]/g;
+const safeChord=/^[A-G](?:#|b)?[a-zA-Z0-9+#b/()\-]{0,24}$/;
 export function buildChordChart(chord:string,lyrics:string):string {
  const sequence=[...lyrics.matchAll(chordToken)].map(match=>match[1]).filter(c=>safeChord.test(c));
  const chordNames=sequence.filter((c,i)=>i===0||c!==sequence[i-1]).slice(0,16);
@@ -11,11 +11,11 @@ export function buildChordChart(chord:string,lyrics:string):string {
  if(chordNames.length===0)throw new Error("Bài hát chưa có hợp âm hợp lệ.");
  // Invisible rest is a layout anchor only. It does not stand for a melody note.
  const bars=chordNames.map(c=>'"'+c.replaceAll('"','')+'" x |').join(" ");
- return ["X:1","T:","M:none","L:1/4","K:C","V:1 clef=treble",bars+" |]"].join("\\n");
+ return ["X:1","T:","M:none","L:1/4","K:C","V:1 clef=treble",bars+" |]"].join("\n");
 }
 export default function SheetRenderer({chord,lyrics,title}:SheetRendererProps){
  const root=useRef<HTMLDivElement>(null),[error,setError]=useState("");
- const text=useMemo(()=>lyrics.replace(/\\r\\n?/g,"\\n").replace(chordToken,"").trim(),[lyrics]);
+ const text=useMemo(()=>lyrics.replace(/\r\n?/g,"\n").replace(chordToken,"").trim(),[lyrics]);
  const notation=useMemo(()=>{try{return buildChordChart(chord,lyrics)}catch{return ""}},[chord,lyrics]);
  useEffect(()=>{
   let cancelled=false;
