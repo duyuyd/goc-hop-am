@@ -21,6 +21,11 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+      - name: Bundle offline sheet previews
+        run: |
+          mkdir -p capacitor-wrapper/www/offline-sheets
+          cp public/ban-pho/files/commons-69630175-600a5f1798.jpg capacitor-wrapper/www/offline-sheets/
+          cp public/ban-pho/files/commons-50421077-88f1040cbd.jpg capacitor-wrapper/www/offline-sheets/
       - name: Install Capacitor
         working-directory: capacitor-wrapper
         run: npm install --no-audit --no-fund
