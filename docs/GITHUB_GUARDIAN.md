@@ -40,3 +40,25 @@ This is a staged baseline, not the entire public GitHub Actions Marketplace; unr
 - The public production probe returned HTTP 200 and the expected page brand in GitHub Actions before this documentation update.
 - OpenSSF Scorecard Action refuses non-default branches. Its workflow is committed for review but will only execute against `main` after a Founder-approved merge; do not count the earlier failed feature-branch run as a completed scan.
 - New custom Actions cannot be considered deployed to the production website merely by creating a PR. Existing website versions are unchanged.
+
+### Lighthouse mobile — production measurement (2026-11-20)
+
+| Metric | Score / 100 |
+| --- | ---: |
+| performance | 70 |
+| accessibility | 96 |
+| best-practices | 81 |
+| seo | 100 |
+
+Proof: https://github.com/duyuyd/goc-hop-am/actions/runs/44789270480. This is a real laboratory run, **not** a permanent score or proof of every logged-in user flow. The workflow produces both full JSON and a compact numeric summary, without changing the live website. Scheduled weekly after merge.
+
+### CodeQL deployment mode
+
+GitHub CodeQL Default Setup (already enabled); no competing advanced workflow. Avoid installing both Default and Advanced CodeQL setups in one repository; GitHub rejects conflicting SARIF analyses.
+
+### Action runs verified
+
+- Public production HTTP/HTML/brand: https://github.com/duyuyd/goc-hop-am/actions/runs/44789270455
+- Dependency Review: https://github.com/duyuyd/goc-hop-am/actions/runs/44789053447
+- Lighthouse: https://github.com/duyuyd/goc-hop-am/actions/runs/44789270480
+- Scorecard: configured to run **only on main**, as the OSSF action refuses branch previews.
