@@ -1,0 +1,49 @@
+name: Guardian - Lighthouse mobile performance accessibility SEO
+on:
+  push:
+    branches: [feat/github-guardian-platform]
+  schedule:
+    - cron: '43 4 * * 6'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: guardian-lighthouse-${{ github.repository }}
+  cancel-in-progress: true
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    env:
+      TARGET_URL: ${{ vars.PRODUCTION_URL || 'https://goc-hop-am.onwardcrust.chatgpt.site/' }}
+      LIGHTHOUSE_REPORT: guardian-lighthouse.json
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check browser is present
+        shell: bash
+        run: |
+          command -v google-chrome || command -v chromium || command -v chromium-browser
+      - name: Audit REAL mobile production page with Chrome Lighthouse
+        shell: bash
+        run: |
+          npx --yes lighthouse@13.6.0 "$TARGET_URL" \
+            --output=json --output-path="$LIGHTHOUSE_REPORT" \
+            --only-categories=performance,accessibility,best-practices,seo \
+            --chrome-flags="--headless --no-sandbox --disable-gpu" \
+            --max-wait-for-load=45000 --quiet
+      - name: Extract measured scores to report
+        run: node scripts/ci/lighthouse-summary.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: guardian-lighthouse-mobile
+          path: |
+            guardian-lighthouse.json
+            guardian-lighthouse-summary.json
+          retention-days: 7
+          if-no-files-found: warn
