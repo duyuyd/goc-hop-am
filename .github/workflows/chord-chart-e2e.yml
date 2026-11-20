@@ -1,0 +1,54 @@
+name: Real Deal chord chart browser video
+on:
+  pull_request:
+    paths:
+      - 'components/SheetRenderer.tsx'
+      - 'components/SongChordChart.tsx'
+      - 'app/chord-chart/**'
+      - 'app/api/reader/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'scripts/e2e-chord-chart.mjs'
+      - '.github/workflows/chord-chart-e2e.yml'
+  workflow_dispatch:
+  push:
+    branches:
+      - 'release/real-deal-v2.0'
+permissions:
+  contents: read
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install app
+        run: npm ci --no-audit --no-fund
+      - name: Install Playwright browser for video
+        run: |
+          npm install --no-save playwright@1.65.1 --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - name: Launch local app
+        run: |
+          npm run dev > dev.log 2>&1 &
+          echo $! > dev.pid
+          for i in $(seq 1 75); do
+            if curl -fsS http://127.0.0.1:5173/ >/dev/null; then exit 0; fi
+            sleep 2
+          done
+          cat dev.log
+          exit 1
+      - name: Verify real chord chart and record video
+        run: node scripts/e2e-chord-chart.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: chord-chart-e2e-video
+          path: |
+            artifacts/real-deal-chord-chart/**
+            dev.log
+          retention-days: 14
+          if-no-files-found: warn

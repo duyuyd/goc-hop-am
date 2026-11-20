@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Góc Hợp Âm</title>
+<style>body{margin:0;background:#17152c;color:#fff;font:16px/1.6 system-ui;padding:18px}main{max-width:800px;margin:auto}h1{color:#ffbe72}a{color:#ffbe72}figure{background:#fff;border-radius:10px;padding:10px;margin:20px 0}img{max-width:100%;height:auto;display:block;margin:auto}figcaption{color:#353535;font-size:13px}</style></head>
+<body><main><h1>Góc Hợp Âm</h1><p id="message">Đang mở website…</p>
+<div id="offline" hidden>
+<p>Chưa có kết nối Internet. Bạn vẫn có thể xem các bản phổ tham khảo được đóng gói trong ứng dụng.</p>
+<figure><img src="./offline-sheets/commons-69630175-600a5f1798.jpg" alt="Bản phổ tham khảo ngoại tuyến số 1"><figcaption>Bản phổ từ thư viện Wikimedia Commons đã lưu trong Góc Hợp Âm.</figcaption></figure>
+<figure><img src="./offline-sheets/commons-50421077-88f1040cbd.jpg" alt="Bản phổ tham khảo ngoại tuyến số 2"><figcaption>Bản phổ từ thư viện Wikimedia Commons đã lưu trong Góc Hợp Âm.</figcaption></figure>
+</div>
+<p><a href="https://goc-hop-am.vercel.app">Thử mở Góc Hợp Âm trực tuyến</a></p>
+</main><script>
+if(navigator.onLine){window.location.replace('https://goc-hop-am.vercel.app')}
+else{document.getElementById("offline").hidden=false;document.getElementById("message").textContent="Chế độ ngoại tuyến"}
+</script></body></html>
