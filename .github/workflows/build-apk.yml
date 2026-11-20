@@ -1,0 +1,63 @@
+name: Build Góc Hợp Âm Capacitor APK and public pre-release
+on:
+  push:
+    branches: [feat/auto-standardization]
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      CAPACITOR_APP_URL: ${{ vars.APK_WEB_URL || 'https://goc-hop-am.onwardcrust.chatgpt.site' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Include existing offline sheet images
+        run: |
+          mkdir -p capacitor-wrapper/www/offline-sheets
+          cp public/ban-pho/files/commons-69630175-600a5f1798.jpg capacitor-wrapper/www/offline-sheets/
+          cp public/ban-pho/files/commons-50421077-88f1040cbd.jpg capacitor-wrapper/www/offline-sheets/
+      - name: Check real target web URL
+        run: |
+          test -n "$CAPACITOR_APP_URL"
+          case "$CAPACITOR_APP_URL" in https://*) ;; *) echo "HTTPS URL required"; exit 1;; esac
+      - name: Install and prepare Capacitor Android
+        working-directory: capacitor-wrapper
+        run: |
+          npm install --no-audit --no-fund
+          npx cap add android
+          npx cap sync android
+      - name: Build APK via Gradle
+        working-directory: capacitor-wrapper/android
+        run: ./gradlew assembleDebug --no-daemon
+      - name: Verify APK exists and is not empty
+        run: |
+          test -s capacitor-wrapper/android/app/build/outputs/apk/debug/app-debug.apk
+          size=$(stat -c%s capacitor-wrapper/android/app/build/outputs/apk/debug/app-debug.apk)
+          echo "APK bytes: $size"
+          test "$size" -gt 5242880
+      - uses: actions/upload-artifact@v4
+        with:
+          name: goc-hop-am-android-apk
+          path: capacitor-wrapper/android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
+      - name: Publish downloadable public preview APK (not a draft release)
+        if: github.ref == 'refs/heads/feat/auto-standardization'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: v2.0.0-android-rc48
+        run: |
+          target="$GITHUB_SHA"
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" --target "$target" --title "Góc Hợp Âm · Android RC48" --notes "Hybrid Capacitor APK connecting to https://goc-hop-am.onwardcrust.chatgpt.site. Public review build; feature branch is not merged. Android debug signing only." --prerelease
+          fi
+          gh release upload "$RELEASE_TAG" capacitor-wrapper/android/app/build/outputs/apk/debug/app-debug.apk --clobber
