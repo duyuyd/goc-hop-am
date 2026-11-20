@@ -1,0 +1,36 @@
+name: Guardian - public production website check
+on:
+  push:
+    branches: [feat/github-guardian-platform]
+  schedule:
+    - cron: '17 1 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: guardian-uptime-${{ github.repository }}
+  cancel-in-progress: true
+jobs:
+  production-probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    env:
+      TARGET_URL: ${{ vars.PRODUCTION_URL || 'https://goc-hop-am.onwardcrust.chatgpt.site/' }}
+      EXPECTED_BRAND: 'Góc Hợp Âm'
+      HEALTH_RESULT_PATH: 'guardian-production-health.json'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify live public origin (no mocks, no login bypass)
+        run: node scripts/ci/production-probe.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: guardian-production-health
+          path: guardian-production-health.json
+          retention-days: 7
+          if-no-files-found: warn
