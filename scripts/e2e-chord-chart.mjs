@@ -10,7 +10,7 @@ try{
  const response=await page.goto("http://127.0.0.1:5173/chord-chart?url="+encodeURIComponent(source),{waitUntil:"domcontentloaded",timeout:45000});
  if(!response?.ok())throw new Error("Chord chart HTTP "+response?.status());
  await page.locator("[data-testid='abcjs-chord-chart'] svg").first().waitFor({timeout:60000,state:"visible"});
- const svgText=await page.locator("[data-testid='abcjs-chord-chart'] svg").first().innerText();
+ const svgText=await page.locator("[data-testid='abcjs-chord-chart'] svg").first().textContent();
  const lyricText=await page.getByTestId("song-lyrics").innerText();
  if(!svgText.includes("Am"))throw new Error("Rendered ABCJS SVG lacks source chord Am");
  if(!lyricText.includes("Hạnh phúc"))throw new Error("Real user-supplied song lyrics were not loaded");
