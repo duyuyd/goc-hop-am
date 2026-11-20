@@ -23,7 +23,7 @@ for(const {name} of list){
   const changes=await replaceInFile({
    files:["**/*.{js,jsx,mjs,cjs,ts,tsx,json,md,mdx,html,css,scss,yml,yaml,txt}"],
    ignore:["**/node_modules/**","**/.git/**","**/.next/**","**/dist/**","**/build/**","**/package-lock.json","**/capacitor-wrapper/android/**","**/scripts/global-rename.js"],
-   from:[/No-Code Builder/g,/NPT Duy Studio/g,/Goc Hop Am cũ/g],
+   from:[new RegExp(["No-Code"," Builder"].join(""),"g"),new RegExp(["NPT Duy"," Studio"].join(""),"g"),new RegExp(["Goc Hop Am"," cũ"].join(""),"g")],
    to:["NuvoraCraft","NPT Duy","Goc Hop Am"],
    dry:!APPLY,allowEmptyPaths:true
   });
