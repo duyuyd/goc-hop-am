@@ -58,3 +58,14 @@ jobs:
             gh release create "$TAG" --title "Góc Hợp Âm $TAG" --notes "Hybrid Android debug APK (Capacitor); requires an internet connection."
           fi
           gh release upload "$TAG" capacitor-wrapper/android/app/build/outputs/apk/debug/app-debug.apk --clobber
+
+      - name: Stage review-only GitHub Release for Founder
+        if: github.ref == 'refs/heads/release/real-deal-v2.0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: v2.0.0-rc46
+        run: |
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --target "$GITHUB_SHA" --title "Góc Hợp Âm v2.0 RC46 · APK for verification" --notes "Hybrid Capacitor debug APK, 2 offline sheet previews. Test-only release: not merged to main, not published to Production." --draft --prerelease
+          fi
+          gh release upload "$TAG" capacitor-wrapper/android/app/build/outputs/apk/debug/app-debug.apk --clobber
