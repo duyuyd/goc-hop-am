@@ -29,7 +29,7 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Install Playwright browser for video
         run: |
-          npm install --no-save playwright@1.56.1 --no-audit --no-fund
+          npm install --no-save playwright@1.65.1 --no-audit --no-fund
           npx playwright install --with-deps chromium
       - name: Launch local app
         run: |
