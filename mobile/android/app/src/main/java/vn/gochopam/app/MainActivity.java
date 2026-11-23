@@ -220,6 +220,7 @@ public final class MainActivity extends Activity {
             case "awake":if(args.optBoolean("enabled"))getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);break;
             case "metronome":if(args.optBoolean("running")){int bpm=Math.max(40,Math.min(240,args.optInt("bpm",80))),beats=args.optInt("beats",4);if(beats!=2&&beats!=3&&beats!=4&&beats!=6)beats=4;startMetro(bpm,beats);}else stopMetro();break;
             case "share":String text=args.optString("text","");String sharedUrl=args.optString("url","");if(!sharedUrl.isEmpty()){Uri link=Uri.parse(sharedUrl);if(!"https".equals(link.getScheme())||!"gochopam.pages.dev".equals(link.getHost())||!"/".equals(link.getPath()))throw new Exception("Liên kết không hợp lệ.");text+="\n"+sharedUrl;}if(text.length()>2000)throw new Exception("Nội dung quá dài.");Intent send=new Intent(Intent.ACTION_SEND);send.setType("text/plain");send.putExtra(Intent.EXTRA_TEXT,text);startActivity(Intent.createChooser(send,"Chia sẻ bài hát"));break;
+            case "aiAssistant":startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(API+"/ai-free/index.html")));break;
             case "help":startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(API+"/huong-dan")));break;
             default:throw new Exception("Thao tác không được hỗ trợ.");
           }reply(requestId,true,true);

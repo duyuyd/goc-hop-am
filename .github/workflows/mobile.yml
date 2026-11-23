@@ -66,11 +66,17 @@ jobs:
       - name: Build unsigned Android App Bundle
         run: |
           node mobile/scripts/prepare-web.mjs
-          gradle -p mobile/android :app:bundleRelease --no-daemon
+          gradle -p mobile/android :app:assembleDebug :app:bundleRelease --no-daemon
+          test -s mobile/android/app/build/outputs/apk/debug/app-debug.apk
       - uses: actions/upload-artifact@v4
         with:
           name: android-unsigned-aab
           path: mobile/android/app/build/outputs/bundle/release/*.aab
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-installable-preview-apk
+          path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 14
       - name: Attach Android bundle to public release
         if: github.event_name == 'release'
@@ -94,28 +100,33 @@ jobs:
           pattern: '*'
           path: mobile/build/release
           merge-multiple: true
-      - name: Verify the exact installable APK and publish preview
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Verify the freshly built installable Android APK
+        shell: bash
         run: |
+          set -euo pipefail
           node - <<'JS'
-          const fs=require('fs');const r=JSON.parse(fs.readFileSync('mobile/distribution/latest.json','utf8'));
-          if(!/^\d+\.\d+\.\d+$/.test(r.version)||!/^\/downloads\/[A-Za-z0-9_.-]+\.apk$/.test(r.download)||!/^[a-f0-9]{64}$/.test(r.sha256))throw Error('Invalid release manifest');
-          fs.writeFileSync('mobile/build/release/SHA256SUMS.txt',r.sha256+'  '+r.download.split('/').pop()+'\n');
-          fs.appendFileSync(process.env.GITHUB_ENV,'RELEASE_TAG=v'+r.version+'\nAPK_NAME='+r.download.split('/').pop()+'\nAPK_URL=https://gochopam.pages.dev'+r.download+'\n');
+          const fs=require('node:fs'),path=require('node:path');
+          const gradle=fs.readFileSync('mobile/android/app/build.gradle','utf8');
+          const version=gradle.match(/versionName '([0-9]+\\.[0-9]+\\.[0-9]+)'/);
+          const file='mobile/build/release/app-debug.apk';
+          if(!version||!fs.existsSync(file)||fs.statSync(file).size<100000)throw Error('Fresh APK artifact missing or version unknown');
+          const out='Goc_Hop_Am_Android_'+version[1]+'_Preview.apk';
+          fs.renameSync(file,path.join('mobile/build/release',out));
+          fs.appendFileSync(process.env.GITHUB_ENV,'RELEASE_TAG=v'+version[1]+'\\nAPP_VERSION='+version[1]+'\\nAPK_NAME='+out+'\\n');
           JS
-      - name: Download and verify installable APK
-        run: |
-          curl --fail --location --retry 2 --max-time 90 "$APK_URL" -o "mobile/build/release/$APK_NAME"
           cd mobile/build/release
-          sha256sum --check SHA256SUMS.txt
-      - name: Publish Android and iOS files with author information
+          unzip -t "$APK_NAME" >/dev/null
+          sha256sum "$APK_NAME" > SHA256SUMS.txt
+          sha256sum -c SHA256SUMS.txt
+      - name: Release the freshly built APK and other mobile artifacts
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            echo "Version already released; leaving its assets unchanged."
-            exit 0
+            gh release upload "$RELEASE_TAG" mobile/build/release/* --clobber
+          else
+            gh release create "$RELEASE_TAG" --target "$GITHUB_SHA" --prerelease --title "Góc Hợp Âm $APP_VERSION · NPT Duy" --notes-file mobile/distribution/NOTES.md
+            gh release upload "$RELEASE_TAG" mobile/build/release/* --clobber
           fi
-          gh release create "$RELEASE_TAG" --target "$GITHUB_SHA" --prerelease --title "Góc Hợp Âm 1.4.0 · NPT Duy" --notes-file mobile/distribution/NOTES.md
-          gh release upload "$RELEASE_TAG" mobile/build/release/* --clobber

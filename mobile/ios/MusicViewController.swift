@@ -246,6 +246,7 @@ final class MusicViewController: UIViewController, WKScriptMessageHandler, WKNav
                 share.popoverPresentationController?.sourceView = web
                 share.popoverPresentationController?.sourceRect = CGRect(x: web.bounds.midX, y: 20, width: 1, height: 1)
                 present(share, animated: true)
+            case "aiAssistant": UIApplication.shared.open(URL(string: apiOrigin + "/ai-free/index.html")!)
             case "help": UIApplication.shared.open(URL(string: apiOrigin + "/huong-dan")!)
             default: reply(id, false, "Thao tác chưa được hỗ trợ."); return
             }

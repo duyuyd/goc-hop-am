@@ -24,7 +24,7 @@ function call(action,args={}){
   if(action==='load'){try{return Promise.resolve(localStorage.getItem(offlineSongStorageKey)||'{}')}catch(error){return Promise.reject(error)}}
   if(action==='save'){try{localStorage.setItem(offlineSongStorageKey,args.value);return Promise.resolve(true)}catch{return Promise.reject(new Error('Thiết bị không còn đủ chỗ lưu.'))}}
   if(action==='metronome'){try{args.running?webMetro(args.bpm,args.beats):stopWebMetro();return Promise.resolve(true)}catch{return Promise.reject(new Error('Chưa phát được nhịp. Hãy kiểm tra âm lượng.'))}}
-  if(action==='help'){window.open('https://gochopam.pages.dev/huong-dan','_blank','noopener');return Promise.resolve(true)}
+  if(action==='help'||action==='aiAssistant'){window.open('https://gochopam.pages.dev/'+(action==='aiAssistant'?'ai-free/index.html':'huong-dan'),'_blank','noopener');return Promise.resolve(true)}
   if(action==='share')return navigator.share?navigator.share({title:args.title,text:args.text,url:args.url}):Promise.reject(new Error('Thiết bị chưa hỗ trợ chia sẻ.'));
   return Promise.resolve(true);
  }
@@ -137,6 +137,7 @@ $('share').addEventListener('click',()=>{if(current)call('share',{title:current.
 $('bpm').addEventListener('input',updateMetro);$('beats').addEventListener('change',()=>{beatLights();updateMetro()});$('bpm-down').addEventListener('click',()=>{$('bpm').value=bpmValue(Number($('bpm').value)-5);updateMetro()});$('bpm-up').addEventListener('click',()=>{$('bpm').value=bpmValue(Number($('bpm').value)+5);updateMetro()});$('metro-toggle').addEventListener('click',()=>{metroRunning=!metroRunning;updateMetro()});
 let taps=[];$('tap-tempo').addEventListener('click',()=>{const now=Date.now();if(taps.length&&now-taps.at(-1)>2000)taps=[];taps.push(now);taps=taps.slice(-6);if(taps.length>1){$('bpm').value=bpmValue(60000*(taps.length-1)/(now-taps[0]));updateMetro()}});
 $('help').addEventListener('click',()=>call('help').catch(error=>toast(error.message)));
+$('ai-open').addEventListener('click',()=>call('aiAssistant').catch(error=>toast(error.message)));
 $('clear-saved').addEventListener('click',()=>$('clear-confirm').hidden=false);$('cancel-clear').addEventListener('click',()=>$('clear-confirm').hidden=true);$('confirm-clear').addEventListener('click',async()=>{try{await call('save',{value:'{}'});offline=Object.create(null);refreshSaved();saveLabel();$('clear-confirm').hidden=true;toast('Đã xóa bài ngoại tuyến trên thiết bị.')}catch(error){toast(error.message)}});
 function pause(){if(studio.permissionPending||follow.permissionPending||musicTools.permissionPending)return;songSheet.stop();follow.stop();studio.onHide();closeVideo();stopScroll();metroRunning=false;stopWebMetro();call('metronome',{running:false,bpm:80,beats:4}).catch(()=>{});call('awake',{enabled:false}).catch(()=>{});metroLabel()}
 document.addEventListener('visibilitychange',()=>{if(document.hidden)pause()});window.addEventListener('nativePause',pause);window.addEventListener('pagehide',pause);
