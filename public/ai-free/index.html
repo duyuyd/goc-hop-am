@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Góc Hợp Âm · Trợ lý AI không cần API key</title>
+<meta name="description" content="Trợ lý AI miễn phí sử dụng Puter.js trên tài khoản cá nhân">
+<style>
+:root{color-scheme:dark;font-family:system-ui,Arial,sans-serif;background:#0c111f;color:#f4f6fc}
+*{box-sizing:border-box}body{margin:0;padding:18px}main{max-width:800px;margin:auto}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+a{color:#ffb46b}h1{font-size:clamp(1.7rem,5vw,2.8rem);margin:28px 0 14px}
+p{color:#cbd5e1;line-height:1.65}#history{min-height:280px;max-height:55vh;overflow:auto;background:#141f31;border:1px solid #35465b;border-radius:16px;padding:12px}
+.message{white-space:pre-wrap;overflow-wrap:anywhere;background:#27364d;padding:12px;border-radius:12px;margin-bottom:12px;line-height:1.55}
+.message.user{margin-left:10%;background:#4b3529}.message strong{display:block;margin-bottom:7px;color:#ffb46b}
+label{font-size:.9rem;display:block;margin:16px 0 8px}textarea{background:#192639;border:1px solid #506075;border-radius:12px;color:white;font:inherit;padding:14px;width:100%;min-height:104px;resize:vertical}
+button{border:0;border-radius:12px;background:#f97316;color:#141414;font-weight:800;padding:14px 20px;cursor:pointer}button:disabled{opacity:.45;cursor:not-allowed}
+footer{font-size:.8rem;padding:18px 0}#status{min-height:20px;color:#ffb46b}small{display:block;color:#bac7d8;margin:10px 0}
+</style><script src="https://js.puter.com/v2/" defer></script></head><body>
+<main><header><strong>Góc Hợp Âm</strong><a href="/">Về trang chủ</a></header>
+<h1>Trợ lý AI · Không cần API key</h1>
+<p>Bạn có thể hỏi AI về nhạc lý, hợp âm, chuyển tông, piano và organ. Mô hình miễn phí của Puter sẽ xử lý yêu cầu qua tài khoản của bạn; không cần khóa AI của chủ website. Một tài khoản Puter có hạn mức miễn phí, và việc sử dụng thêm có thể yêu cầu nạp tiền trên Puter.</p>
+<section id="history" role="log" aria-label="Hội thoại AI" aria-live="polite"><p>Hãy nhập yêu cầu bên dưới. AI không tự ý sửa, ghi hoặc xuất bản dự án.</p></section>
+<form id="ask"><label for="prompt">Bạn muốn AI hỗ trợ điều gì?</label>
+<textarea id="prompt" maxlength="3000" required placeholder="Nhập câu hỏi hoặc yêu cầu cụ thể..."></textarea>
+<div><button id="send" type="submit">Gửi AI</button><small>Mô hình: Liquid LFM 2.5 Instruct (FREE). Cần đăng nhập Puter khi dùng.</small></div></form>
+<p id="status" role="status" aria-live="polite"></p>
+<footer>Không gửi API key, mật khẩu hoặc thông tin riêng tư. Nội dung được chuyển đến Puter để xử lý. <a href="https://developer.puter.com/pricing/" rel="noopener noreferrer" target="_blank">Hạn mức và chi phí Puter</a>.</footer>
+</main>
+<script>
+(function(){
+"use strict";
+var model="liquid/lfm-2.5-1.2b-instruct:free";
+var form=document.getElementById("ask"),prompt=document.getElementById("prompt"),send=document.getElementById("send"),history=document.getElementById("history"),status=document.getElementById("status");
+var turns=[{role:"system",content:"Bạn là trợ lý AI của Góc Hợp Âm. Hướng dẫn nhạc lý và luyện tập, không khẳng định đã tạo sheet PDF/MusicXML hoặc truy cập bài hát thật.. Trả lời tiếng Việt rõ ràng, không bịa dữ liệu, không nói đã sửa hoặc xuất bản khi chưa thực hiện."}];
+function show(role,text){
+ var block=document.createElement("div"),title=document.createElement("strong");
+ block.className="message "+(role==="user"?"user":"assistant");title.textContent=role==="user"?"Bạn":"AI";block.appendChild(title);block.appendChild(document.createTextNode(text));
+ if(history.querySelector("p"))history.querySelector("p").remove();
+ history.appendChild(block);history.scrollTop=history.scrollHeight;
+}
+function getText(result){
+ if(typeof result==="string")return result.trim();
+ var c=result&&result.message&&result.message.content||result&&result.text||"";
+ if(Array.isArray(c))return c.map(function(t){return typeof t==="string"?t:(t&&t.text)||""}).join("\n").trim();
+ return typeof c==="string"?c.trim():"";
+}
+form.addEventListener("submit",async function(e){
+ e.preventDefault();var text=prompt.value.trim();if(text.length<2||send.disabled)return;
+ if(!window.puter||!puter.ai||!puter.ai.chat){status.textContent="AI chưa tải được. Kiểm tra mạng rồi thử lại.";return}
+ send.disabled=true;status.textContent="Đang kết nối...";
+ try{
+  if(!puter.auth.isSignedIn())await puter.auth.signIn();
+  var next=turns.slice(-10).concat([{role:"user",content:text}]);
+  var answer=getText(await puter.ai.chat(next,{model:model,max_tokens:1400}));
+  if(!answer)throw Error("AI chưa trả về nội dung.");
+  turns=next.concat([{role:"assistant",content:answer}]);show("user",text);show("assistant",answer);
+  prompt.value="";status.textContent="Đã nhận câu trả lời từ Puter AI.";
+ }catch(err){status.textContent=err&&err.message?err.message:"Không thể kết nối Puter AI, hãy thử lại."}
+ finally{send.disabled=false}
+});
+})();
+</script></body></html>
