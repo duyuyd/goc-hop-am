@@ -115,6 +115,8 @@ jobs:
           fs.renameSync(file,path.join('mobile/build/release',out));
           fs.appendFileSync(process.env.GITHUB_ENV,['RELEASE_TAG=v'+version[1],'APP_VERSION='+version[1],'APK_NAME='+out,''].join(String.fromCharCode(10)));
           JS
+          APK_NAME="$(basename "$(find mobile/build/release -maxdepth 1 -name 'Goc_Hop_Am_Android_*_Preview.apk' -type f -print -quit)")"
+          test -n "$APK_NAME"
           cd mobile/build/release
           unzip -t "$APK_NAME" >/dev/null
           sha256sum "$APK_NAME" > SHA256SUMS.txt
