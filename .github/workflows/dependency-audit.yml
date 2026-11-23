@@ -42,7 +42,7 @@ jobs:
           console.log(summary);
           if ((counts.critical ?? 0) + (counts.high ?? 0) > 0) process.exitCode = 1;
           JS
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: npm-security-audit

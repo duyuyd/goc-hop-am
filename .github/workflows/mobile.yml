@@ -35,7 +35,7 @@ jobs:
           cp -R mobile/build/ios-device/Build/Products/Release-iphoneos/GocHopAm.app mobile/build/Payload/
           cd mobile/build
           zip -qry release/Goc_Hop_Am_iOS_Chua_Ky.ipa Payload
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ios-unsigned-and-simulator
           path: mobile/build/release/*
@@ -68,12 +68,12 @@ jobs:
           node mobile/scripts/prepare-web.mjs
           gradle -p mobile/android :app:assembleDebug :app:bundleRelease --no-daemon
           test -s mobile/android/app/build/outputs/apk/debug/app-debug.apk
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: android-unsigned-aab
           path: mobile/android/app/build/outputs/bundle/release/*.aab
           retention-days: 14
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: android-installable-preview-apk
           path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
